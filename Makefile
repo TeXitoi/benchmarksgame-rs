@@ -1,5 +1,6 @@
 SOURCES = $(wildcard src/*.rs)
 RUSTC ?= rustc
+RUSTC_FLAGS ?= -C opt-level=3 -C target-cpu=core2 -C lto
 
 .PHONY: all distclean clean
 
@@ -13,7 +14,7 @@ distclean: clean
 
 bin/%: src/%.rs
 	mkdir -p bin
-	$(RUSTC) -C opt-level=3 -C target-cpu=core2 -C lto $< -o $@
+	$(RUSTC) $(RUSTC_FLAGS) $< -o $@
 
 out/%.txt: bin/% data/%.txt
 	mkdir -p out
