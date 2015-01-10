@@ -12,6 +12,10 @@ clean:
 distclean: clean
 	rm -fr bin out
 
+diff/chameneos-redux.diff: out/chameneos-redux.txt ref/chameneos-redux.txt
+	mkdir -p diff
+	sed -r 's/^[0-9]+/42/' $< | diff -u ref/chameneos-redux.txt - > $@
+
 bin/%: src/%.rs
 	mkdir -p bin
 	$(RUSTC) $(RUSTC_FLAGS) $< -o $@
