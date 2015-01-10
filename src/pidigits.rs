@@ -4,7 +4,6 @@
 // Contributed by TeXitoi
 // Inspired by Mr Ledrug's C version and thestinger's rust-gmp
 
-#![feature(associated_types)]
 #![allow(non_camel_case_types)]
 
 extern crate libc;
@@ -20,7 +19,7 @@ fn main() {
         if (i + 1) % 10 == 0 { println!("\t:{}", i + 1); }
     }
     if n % 10 != 0 {
-        for _ in range(n % 10, 10) { print!(" "); }
+        for _ in n % 10 .. 10 { print!(" "); }
         println!("\t:{}", n);
     }
 }
