@@ -5,7 +5,6 @@
 // contributed by TeXitoi
 
 #![allow(non_snake_case)]
-#![feature(unboxed_closures)]
 
 use std::iter::{repeat, AdditiveIterator};
 use std::thread::Thread;
