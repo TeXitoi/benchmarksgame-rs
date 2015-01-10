@@ -10,26 +10,30 @@ use std::iter::range_step;
 use std::thread::Thread;
 use arena::TypedArena;
 
-enum Tree<'a> {
-    Nil,
-    Node(&'a Tree<'a>, &'a Tree<'a>, i32)
+struct Tree<'a> {
+    l: Option<&'a Tree<'a>>,
+    r: Option<&'a Tree<'a>>,
+    i: i32
 }
 
-fn item_check(t: &Tree) -> i32 {
+fn item_check(t: &Option<&Tree>) -> i32 {
     match *t {
-        Tree::Nil => 0,
-        Tree::Node(l, r, i) => i + item_check(l) - item_check(r)
+        None => 0,
+        Some(&Tree { ref l, ref r, i }) => i + item_check(l) - item_check(r)
     }
 }
 
 fn bottom_up_tree<'r>(arena: &'r TypedArena<Tree<'r>>, item: i32, depth: i32)
-                  -> &'r Tree<'r> {
+                  -> Option<&'r Tree<'r>> {
     if depth > 0 {
-        arena.alloc(Tree::Node(bottom_up_tree(arena, 2 * item - 1, depth - 1),
-                               bottom_up_tree(arena, 2 * item, depth - 1),
-                               item))
+        let t: &Tree<'r> = arena.alloc(Tree {
+            l: bottom_up_tree(arena, 2 * item - 1, depth - 1),
+            r: bottom_up_tree(arena, 2 * item, depth - 1),
+            i: item
+        });
+        Some(t)
     } else {
-        arena.alloc(Tree::Nil)
+        None
     }
 }
 
@@ -44,7 +48,7 @@ fn main() {
         let tree = bottom_up_tree(&arena, 0, depth);
 
         println!("stretch tree of depth {}\t check: {}",
-                 depth, item_check(tree));
+                 depth, item_check(&tree));
     }
 
     let long_lived_arena = TypedArena::new();
@@ -59,7 +63,7 @@ fn main() {
                     let arena = TypedArena::new();
                     let a = bottom_up_tree(&arena, i, depth);
                     let b = bottom_up_tree(&arena, -i, depth);
-                    chk += item_check(a) + item_check(b);
+                    chk += item_check(&a) + item_check(&b);
                 }
                 format!("{}\t trees of depth {}\t check: {}",
                         iterations * 2, depth, chk)
@@ -71,5 +75,5 @@ fn main() {
     }
 
     println!("long lived tree of depth {}\t check: {}",
-             max_depth, item_check(long_lived_tree));
+             max_depth, item_check(&long_lived_tree));
 }
