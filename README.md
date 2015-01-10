@@ -9,7 +9,7 @@ to which I made the following modifications to be published:
    contributor line because I propose the program as asked by the
    site);
  - removing the rust test framework specific code;
- - possibly removing warnings or other *trivial* modifications.
+ - possibly removing warnings or other **trivial** modifications.
 
 If you want to contribute, please propose your version first to the
 official rust repository, and then propose a pull request here.
