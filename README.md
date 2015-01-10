@@ -15,4 +15,5 @@ If you want to contribute, please propose your version first to the
 official rust repository, and then propose a pull request here.
 
 There is a specific exception: pidigits.  I have a special version
-that is not provided by the rust repo because it depends on GMP.
+that is not provided by the rust repo because it depends on GMP, thus
+you can propose directly a pull request here.
