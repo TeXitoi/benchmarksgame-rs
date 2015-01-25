@@ -260,7 +260,7 @@ fn main() {
     let input = get_sequence(&mut *std::io::stdin().lock(), ">THREE");
     let input = Arc::new(input);
 
-    let nb_freqs: Vec<_> = (1..3).map(|i| {
+    let nb_freqs: Vec<_> = (1us..3).map(|i| {
         let input = input.clone();
         (i, Thread::scoped(move|| generate_frequencies(&**input, i)))
     }).collect();
