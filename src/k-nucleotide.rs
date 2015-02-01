@@ -257,7 +257,7 @@ fn get_sequence<R: Buffer>(r: &mut R, key: &str) -> Vec<u8> {
 }
 
 fn main() {
-    let input = get_sequence(&mut *std::io::stdin().lock(), ">THREE");
+    let input = get_sequence(&mut *std::old_io::stdin().lock(), ">THREE");
     let input = Arc::new(input);
 
     let nb_freqs: Vec<_> = (1us..3).map(|i| {

@@ -7,7 +7,7 @@
 #![feature(simd)]
 #![allow(unstable)]
 
-use std::io;
+use std::old_io;
 use std::simd::f64x2;
 use std::sync::Arc;
 use std::thread::Thread;
@@ -17,7 +17,7 @@ const LIMIT: f64 = 2.0;
 const WORKERS: usize = 16;
 
 #[inline(always)]
-fn mandelbrot<W: io::Writer>(w: usize, mut out: W) -> io::IoResult<()> {
+fn mandelbrot<W: old_io::Writer>(w: usize, mut out: W) -> old_io::IoResult<()> {
     assert!(WORKERS % 2 == 0);
 
     // Ensure w and h are multiples of 8.
@@ -162,5 +162,5 @@ fn write_line(init_i: f64, vec_init_r: &[f64], res: &mut Vec<u8>) {
 
 fn main() {
     let n = std::os::args().get(1).and_then(|n| n.parse()).unwrap_or(200);
-    mandelbrot(n, io::stdout()).unwrap();
+    mandelbrot(n, old_io::stdout()).unwrap();
 }
