@@ -3,6 +3,7 @@ RUSTC ?= rustc
 RUSTC_FLAGS ?= -C opt-level=3 -C target-cpu=core2 -C lto
 
 .PHONY: all distclean clean
+.SECONDARY:
 
 all: $(patsubst src/%.rs,diff/%.diff, $(SOURCES))
 
