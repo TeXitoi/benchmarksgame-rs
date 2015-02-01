@@ -4,6 +4,8 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
+#![feature(os, collections, core, std_misc)]
+
 #![allow(non_snake_case)]
 
 use std::iter::{repeat, AdditiveIterator};

@@ -4,8 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(simd)]
-#![allow(unstable)]
+#![feature(core, os, collections, std_misc, io)]
 
 use std::old_io;
 use std::simd::f64x2;
@@ -97,7 +96,7 @@ fn mandelbrot<W: old_io::Writer>(w: usize, mut out: W) -> old_io::IoResult<()> {
                 (i + 1) * chunk_size
             };
 
-            for &init_i in vec_init_i.slice(start, end).iter() {
+            for &init_i in vec_init_i[start..end].iter() {
                 write_line(init_i, init_r_slice, &mut res);
             }
 
@@ -107,7 +106,7 @@ fn mandelbrot<W: old_io::Writer>(w: usize, mut out: W) -> old_io::IoResult<()> {
 
     try!(writeln!(&mut out as &mut Writer, "P4\n{} {}", w, h));
     for res in data.into_iter() {
-        try!(out.write(res.join().ok().unwrap().as_slice()));
+        try!(out.write_all(res.join().ok().unwrap().as_slice()));
     }
     out.flush()
 }

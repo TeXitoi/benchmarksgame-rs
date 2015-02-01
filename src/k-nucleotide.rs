@@ -4,7 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(box_syntax)]
+#![feature(box_syntax, io, collections, std_misc)]
 
 use std::ascii::OwnedAsciiExt;
 use std::slice;

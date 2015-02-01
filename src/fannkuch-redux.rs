@@ -4,6 +4,8 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
+#![feature(core, std_misc, os, collections)]
+
 use std::{cmp, iter, mem};
 use std::thread::Thread;
 

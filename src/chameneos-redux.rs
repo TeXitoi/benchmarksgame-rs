@@ -4,6 +4,8 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
+#![feature(core, std_misc, os, collections)]
+
 use self::Color::{Red, Yellow, Blue};
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::fmt;
@@ -26,7 +28,7 @@ enum Color {
 
 impl Copy for Color {}
 
-impl fmt::String for Color {
+impl fmt::Display for Color {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let str = match *self {
             Red => "red",
@@ -48,7 +50,7 @@ fn show_color_list(set: Vec<Color>) -> String {
     let mut out = String::new();
     for col in set.iter() {
         out.push(' ');
-        out.push_str(&format!("{}", col)[]);
+        out.push_str(&*format!("{}", col));
     }
     out
 }
@@ -70,7 +72,7 @@ fn show_digit(nn: usize) -> &'static str {
 }
 
 struct Number(usize);
-impl fmt::String for Number {
+impl fmt::Display for Number {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut out = vec![];
         let Number(mut num) = *self;

@@ -4,6 +4,8 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
+#![feature(rustc_private, os, collections, core, std_misc)]
+
 extern crate arena;
 
 use std::iter::range_step;

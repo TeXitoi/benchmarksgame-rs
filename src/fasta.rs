@@ -4,11 +4,11 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
+#![feature(os, collections, io)]
+
 use std::cmp::min;
-use std::old_io::{BufferedWriter, File};
 use std::old_io;
 use std::num::Float;
-use std::os;
 
 const LINE_LENGTH: usize = 60;
 const IM: u32 = 139968;
@@ -54,7 +54,7 @@ fn make_fasta<W: Writer, I: Iterator<Item=u8>>(
     wr: &mut W, header: &str, mut it: I, mut n: usize)
     -> std::old_io::IoResult<()>
 {
-    try!(wr.write(header.as_bytes()));
+    try!(wr.write_all(header.as_bytes()));
     let mut line = [0u8; LINE_LENGTH + 1];
     while n > 0 {
         let nb = min(LINE_LENGTH, n);
@@ -63,7 +63,7 @@ fn make_fasta<W: Writer, I: Iterator<Item=u8>>(
         }
         n -= nb;
         line[nb] = '\n' as u8;
-        try!(wr.write(&line[..(nb+1)]));
+        try!(wr.write_all(&line[..(nb+1)]));
     }
     Ok(())
 }

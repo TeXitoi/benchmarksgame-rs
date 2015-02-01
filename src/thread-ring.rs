@@ -4,6 +4,8 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
+#![feature(std_misc, os, collections)]
+
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread::Thread;
 
@@ -16,7 +18,7 @@ fn start(n_tasks: i32, token: i32) {
         let cur_rx = std::mem::replace(&mut rx, next_rx);
         guards.push(Thread::scoped(move|| roundtrip(i, tx, cur_rx)));
     }
-    let guard = Thread::scoped(move|| roundtrip(1, tx, rx));
+    let _guard = Thread::scoped(move|| roundtrip(1, tx, rx));
 }
 
 fn roundtrip(id: i32, tx: Sender<i32>, rx: Receiver<i32>) {

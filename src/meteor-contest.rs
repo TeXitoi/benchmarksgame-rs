@@ -4,6 +4,8 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
+#![feature(std_misc)]
+
 use std::iter::repeat;
 use std::sync::Arc;
 use std::sync::mpsc::channel;
@@ -81,7 +83,7 @@ fn transform(piece: Vec<(i32, i32)> , all: bool) -> Vec<Vec<(i32, i32)>> {
 
     // translating to (0, 0) as minimum coordinates.
     for cur_piece in res.iter_mut() {
-        let (dy, dx) = *cur_piece.iter().min_by(|e| *e).unwrap();
+        let (dy, dx) = *cur_piece.iter().min().unwrap();
         for &mut (ref mut y, ref mut x) in cur_piece.iter_mut() {
             *y -= dy; *x -= dx;
         }

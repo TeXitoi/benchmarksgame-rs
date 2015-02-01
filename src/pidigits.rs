@@ -4,6 +4,8 @@
 // Contributed by TeXitoi
 // Inspired by Mr Ledrug's C version and thestinger's rust-gmp
 
+#![feature(libc, os, collections)]
+
 #![allow(non_camel_case_types)]
 
 extern crate libc;

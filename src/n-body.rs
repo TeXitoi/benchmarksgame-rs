@@ -4,6 +4,8 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
+#![feature(os, collections, core)]
+
 use std::num::Float;
 
 const PI: f64 = 3.141592653589793;

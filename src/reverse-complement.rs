@@ -4,6 +4,8 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
+#![feature(libc, io, core, std_misc)]
+
 extern crate libc;
 
 use std::old_io::stdio::{stdin_raw, stdout_raw};
@@ -117,7 +119,7 @@ impl<'a> Iterator for MutDnaSeqs<'a> {
     fn next(&mut self) -> Option<&'a mut [u8]> {
         let tmp = std::mem::replace(&mut self.s, &mut []);
         let tmp = match memchr(tmp, b'\n') {
-            Some(i) => tmp.slice_from_mut(i + 1),
+            Some(i) => &mut tmp[i + 1 ..],
             None => return None,
         };
         let (seq, tmp) = match memchr(tmp, b'>') {
@@ -137,8 +139,8 @@ const LINE_LEN: usize = 60;
 
 /// Compute the reverse complement.
 fn reverse_complement(seq: &mut [u8], tables: &Tables) {
-    let seq = seq.init_mut();// Drop the last newline
-    let len = seq.len();
+    let len = seq.len() - 1;
+    let seq = &mut seq[..len];// Drop the last newline
     let off = LINE_LEN - len % (LINE_LEN + 1);
     let mut i = LINE_LEN;
     while i < len {
@@ -213,6 +215,6 @@ fn parallel<'a, I, T, F>(iter: I, f: F)
 fn main() {
     let mut data = read_to_end(&mut stdin_raw()).unwrap();
     let tables = &Tables::new();
-    parallel(mut_dna_seqs(data.as_mut_slice()), |&: seq| reverse_complement(seq, tables));
-    stdout_raw().write(data.as_mut_slice()).unwrap();
+    parallel(mut_dna_seqs(&mut*data), |&: seq| reverse_complement(seq, tables));
+    stdout_raw().write_all(&mut*data).unwrap();
 }
