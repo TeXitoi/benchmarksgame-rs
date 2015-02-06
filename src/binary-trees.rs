@@ -4,7 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(rustc_private, os, collections, core, std_misc)]
+#![feature(rustc_private, os, core, std_misc, env)]
 
 extern crate arena;
 
@@ -52,7 +52,10 @@ fn inner(depth: i32, iterations: i32) -> String {
 }
 
 fn main() {
-    let n = std::os::args().get(1).and_then(|n| n.parse()).unwrap_or(10);
+    let n = std::env::args().nth(1)
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(10);
     let min_depth = 4;
     let max_depth = if min_depth + 2 > n {min_depth + 2} else {n};
 

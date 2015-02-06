@@ -4,7 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(os, collections, io)]
+#![feature(os, io, env, core)]
 
 use std::cmp::min;
 use std::old_io;
@@ -69,7 +69,10 @@ fn make_fasta<W: Writer, I: Iterator<Item=u8>>(
 }
 
 fn run<W: Writer>(writer: &mut W) -> std::old_io::IoResult<()> {
-    let n = std::os::args().get(1).and_then(|n| n.parse()).unwrap_or(1000);
+    let n = std::env::args().nth(1)
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(1000);
 
     let rng = &mut MyRandom::new();
     let alu =

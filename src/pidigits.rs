@@ -4,7 +4,7 @@
 // Contributed by TeXitoi
 // Inspired by Mr Ledrug's C version and thestinger's rust-gmp
 
-#![feature(libc, os, collections)]
+#![feature(libc, os, core, env)]
 
 #![allow(non_camel_case_types)]
 
@@ -15,7 +15,10 @@ use std::mem::uninitialized;
 use std::cmp::Ordering;
 
 fn main() {
-    let n = std::os::args().get(1).and_then(|n| n.parse()).unwrap_or(27);
+    let n = std::env::args().nth(1)
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(27);
     for (i, d) in Context::new().enumerate().take(n) {
         print!("{}", d);
         if (i + 1) % 10 == 0 { println!("\t:{}", i + 1); }

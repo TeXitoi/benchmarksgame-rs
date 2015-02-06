@@ -4,7 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(os, collections, core, std_misc)]
+#![feature(os, core, std_misc, env)]
 
 #![allow(non_snake_case)]
 
@@ -17,7 +17,10 @@ use std::raw::Repr;
 use std::simd::f64x2;
 
 fn main() {
-    let n = std::os::args().get(1).and_then(|n| n.parse()).unwrap_or(100);
+    let n = std::env::args().nth(1)
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(100);
     let answer = spectralnorm(n);
     println!("{:.9}", answer);
 }

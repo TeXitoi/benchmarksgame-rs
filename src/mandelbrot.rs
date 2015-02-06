@@ -4,7 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(core, os, collections, std_misc, io)]
+#![feature(core, os, std_misc, io, env)]
 
 use std::old_io;
 use std::simd::f64x2;
@@ -160,6 +160,9 @@ fn write_line(init_i: f64, vec_init_r: &[f64], res: &mut Vec<u8>) {
 }
 
 fn main() {
-    let n = std::os::args().get(1).and_then(|n| n.parse()).unwrap_or(200);
+    let n = std::env::args().nth(1)
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(200);
     mandelbrot(n, old_io::stdout()).unwrap();
 }

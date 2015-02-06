@@ -4,7 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(std_misc)]
+#![feature(std_misc, core)]
 
 use std::iter::repeat;
 use std::sync::Arc;

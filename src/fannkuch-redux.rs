@@ -4,7 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(core, std_misc, os, collections)]
+#![feature(core, std_misc, os, env)]
 
 use std::{cmp, iter, mem};
 use std::thread::Thread;
@@ -150,7 +150,10 @@ fn fannkuch(n: i32) -> (i32, i32) {
 }
 
 fn main() {
-    let n = std::os::args().get(1).and_then(|arg| arg.parse()).unwrap_or(7);
+    let n = std::env::args().nth(1)
+        .and_then(|s| s.into_string().ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(7);
 
     let (checksum, maxflips) = fannkuch(n);
     println!("{}\nPfannkuchen({}) = {}", checksum, n, maxflips);
