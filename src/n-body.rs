@@ -139,7 +139,7 @@ fn offset_momentum(bodies: &mut [Planet;N_BODIES]) {
 }
 
 fn main() {
-    let n = std::env::args().nth(1)
+    let n = std::env::args_os().nth(1)
         .and_then(|s| s.into_string().ok())
         .and_then(|n| n.parse().ok())
         .unwrap_or(1000);

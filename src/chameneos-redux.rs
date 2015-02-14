@@ -4,7 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(core, std_misc, os, env)]
+#![feature(std_misc, os, env)]
 
 use self::Color::{Red, Yellow, Blue};
 use std::sync::mpsc::{channel, Sender, Receiver};
@@ -195,7 +195,7 @@ fn rendezvous(nn: usize, set: Vec<Color>) {
 }
 
 fn main() {
-    let nn = std::env::args().nth(1)
+    let nn = std::env::args_os().nth(1)
         .and_then(|s| s.into_string().ok())
         .and_then(|n| n.parse().ok())
         .unwrap_or(600);

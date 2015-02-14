@@ -4,7 +4,7 @@
 // Contributed by TeXitoi
 // Inspired by Mr Ledrug's C version and thestinger's rust-gmp
 
-#![feature(libc, os, core, env)]
+#![feature(libc, os, env)]
 
 #![allow(non_camel_case_types)]
 
@@ -15,7 +15,7 @@ use std::mem::uninitialized;
 use std::cmp::Ordering;
 
 fn main() {
-    let n = std::env::args().nth(1)
+    let n = std::env::args_os().nth(1)
         .and_then(|s| s.into_string().ok())
         .and_then(|n| n.parse().ok())
         .unwrap_or(27);

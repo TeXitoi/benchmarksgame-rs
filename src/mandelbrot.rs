@@ -160,7 +160,7 @@ fn write_line(init_i: f64, vec_init_r: &[f64], res: &mut Vec<u8>) {
 }
 
 fn main() {
-    let n = std::env::args().nth(1)
+    let n = std::env::args_os().nth(1)
         .and_then(|s| s.into_string().ok())
         .and_then(|n| n.parse().ok())
         .unwrap_or(200);

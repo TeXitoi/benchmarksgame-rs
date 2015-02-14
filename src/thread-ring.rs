@@ -4,7 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(std_misc, os, env, core)]
+#![feature(std_misc, os, env)]
 
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread::Thread;
@@ -32,11 +32,12 @@ fn roundtrip(id: i32, tx: Sender<i32>, rx: Receiver<i32>) {
 }
 
 fn main() {
-    let token = std::env::args().nth(1)
+    let args = &mut std::env::args_os();
+    let token = args.skip(1).next()
         .and_then(|s| s.into_string().ok())
         .and_then(|n| n.parse().ok())
         .unwrap_or(1000);
-    let n_tasks = std::env::args().nth(2)
+    let n_tasks = args.next()
         .and_then(|s| s.into_string().ok())
         .and_then(|n| n.parse().ok())
         .unwrap_or(503);
