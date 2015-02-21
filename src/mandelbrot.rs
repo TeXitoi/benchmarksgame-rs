@@ -4,12 +4,12 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(core, os, std_misc, io, env)]
+#![feature(core, os, old_io, env)]
 
 use std::old_io;
 use std::simd::f64x2;
 use std::sync::Arc;
-use std::thread::Thread;
+use std::thread::scoped;
 
 const ITER: i32 = 50;
 const LIMIT: f64 = 2.0;
@@ -44,7 +44,7 @@ fn mandelbrot<W: old_io::Writer>(w: usize, mut out: W) -> old_io::IoResult<()> {
     let mut precalc_i = Vec::with_capacity(h);
 
     let precalc_futures = range(0, WORKERS).map(|i| {
-        Thread::scoped(move|| {
+        scoped(move|| {
             let mut rs = Vec::with_capacity(w / WORKERS);
             let mut is = Vec::with_capacity(w / WORKERS);
 
@@ -70,7 +70,7 @@ fn mandelbrot<W: old_io::Writer>(w: usize, mut out: W) -> old_io::IoResult<()> {
     }).collect::<Vec<_>>();
 
     for res in precalc_futures.into_iter() {
-        let (rs, is) = res.join().ok().unwrap();
+        let (rs, is) = res.join();
         precalc_r.extend(rs.into_iter());
         precalc_i.extend(is.into_iter());
     }
@@ -85,7 +85,7 @@ fn mandelbrot<W: old_io::Writer>(w: usize, mut out: W) -> old_io::IoResult<()> {
         let vec_init_r = arc_init_r.clone();
         let vec_init_i = arc_init_i.clone();
 
-        Thread::scoped(move|| {
+        scoped(move|| {
             let mut res: Vec<u8> = Vec::with_capacity((chunk_size * w) / 8);
             let init_r_slice = vec_init_r.as_slice();
 
@@ -106,7 +106,7 @@ fn mandelbrot<W: old_io::Writer>(w: usize, mut out: W) -> old_io::IoResult<()> {
 
     try!(writeln!(&mut out as &mut Writer, "P4\n{} {}", w, h));
     for res in data.into_iter() {
-        try!(out.write_all(res.join().ok().unwrap().as_slice()));
+        try!(out.write_all(&res.join()));
     }
     out.flush()
 }

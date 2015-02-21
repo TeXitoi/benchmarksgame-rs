@@ -4,12 +4,12 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(rustc_private, os, core, std_misc, env)]
+#![feature(rustc_private, os, core, env)]
 
 extern crate arena;
 
 use std::iter::range_step;
-use std::thread::Thread;
+use std::thread::scoped;
 use arena::TypedArena;
 
 struct Tree<'a> {
@@ -74,11 +74,11 @@ fn main() {
     let messages = range_step(min_depth, max_depth + 1, 2).map(|depth| {
         use std::num::Int;
         let iterations = 2.pow((max_depth - depth + min_depth) as usize);
-        Thread::scoped(move || inner(depth, iterations))
+        scoped(move || inner(depth, iterations))
     }).collect::<Vec<_>>();
 
     for message in messages.into_iter() {
-        println!("{}", message.join().ok().unwrap());
+        println!("{}", message.join());
     }
 
     println!("long lived tree of depth {}\t check: {}",

@@ -4,10 +4,10 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(core, std_misc, os, env)]
+#![feature(core, os, env)]
 
 use std::{cmp, iter, mem};
-use std::thread::Thread;
+use std::thread::scoped;
 
 fn rotate(x: &mut [i32]) {
     let mut prev = x[0];
@@ -134,7 +134,7 @@ fn fannkuch(n: i32) -> (i32, i32) {
     for (_, j) in (0..n).zip(iter::count(0, k)) {
         let max = cmp::min(j+k, perm.max());
 
-        futures.push(Thread::scoped(move|| {
+        futures.push(scoped(move|| {
             work(perm, j as usize, max as usize)
         }))
     }
@@ -142,7 +142,7 @@ fn fannkuch(n: i32) -> (i32, i32) {
     let mut checksum = 0;
     let mut maxflips = 0;
     for fut in futures.into_iter() {
-        let (cs, mf) = fut.join().ok().unwrap();
+        let (cs, mf) = fut.join();
         checksum += cs;
         maxflips = cmp::max(maxflips, mf);
     }

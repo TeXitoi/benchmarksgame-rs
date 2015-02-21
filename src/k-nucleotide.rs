@@ -4,12 +4,12 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(box_syntax, io, collections, std_misc, core)]
+#![feature(box_syntax, old_io, collections, std_misc)]
 
 use std::ascii::OwnedAsciiExt;
 use std::slice;
 use std::sync::Arc;
-use std::thread::Thread;
+use std::thread::scoped;
 
 static TABLE: [u8;4] = [ 'A' as u8, 'C' as u8, 'G' as u8, 'T' as u8 ];
 static TABLE_SIZE: usize = 2 << 16;
@@ -261,19 +261,19 @@ fn main() {
     let input = get_sequence(&mut *stdin.lock(), ">THREE");
     let input = Arc::new(input);
 
-    let nb_freqs: Vec<_> = (1us..3).map(|i| {
+    let nb_freqs: Vec<_> = (1usize..3).map(|i| {
         let input = input.clone();
-        (i, Thread::scoped(move|| generate_frequencies(&**input, i)))
+        (i, scoped(move|| generate_frequencies(&input, i)))
     }).collect();
     let occ_freqs: Vec<_> = OCCURRENCES.iter().map(|&occ| {
         let input = input.clone();
-        Thread::scoped(move|| generate_frequencies(&**input, occ.len()))
+        scoped(move|| generate_frequencies(&input, occ.len()))
     }).collect();
 
     for (i, freq) in nb_freqs.into_iter() {
-        print_frequencies(&freq.join().ok().unwrap(), i);
+        print_frequencies(&freq.join(), i);
     }
     for (&occ, freq) in OCCURRENCES.iter().zip(occ_freqs.into_iter()) {
-        print_occurrences(&mut freq.join().ok().unwrap(), occ);
+        print_occurrences(&mut freq.join(), occ);
     }
 }
