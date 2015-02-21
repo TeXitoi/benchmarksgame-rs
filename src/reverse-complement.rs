@@ -4,14 +4,14 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(libc, io, core, std_misc)]
+#![feature(libc, core, old_io)]
 
 extern crate libc;
 
 use std::old_io::stdio::{stdin_raw, stdout_raw};
 use std::old_io::{IoResult, EndOfFile};
 use std::ptr::copy_memory;
-use std::thread::Thread;
+use std::thread;
 
 struct Tables {
     table8: [u8;1 << 8],
@@ -54,12 +54,12 @@ impl Tables {
         }
     }
 
-    /// Retreives the complement for `i`.
+    /// Retrieves the complement for `i`.
     fn cpl8(&self, i: u8) -> u8 {
         self.table8[i as usize]
     }
 
-    /// Retreives the complement for `i`.
+    /// Retrieves the complement for `i`.
     fn cpl16(&self, i: u16) -> u16 {
         self.table16[i as usize]
     }
@@ -186,28 +186,14 @@ fn reverse_complement(seq: &mut [u8], tables: &Tables) {
     }
 }
 
-
-struct Racy<T>(T);
-
-unsafe impl<T: 'static> Send for Racy<T> {}
-
 /// Executes a closure in parallel over the given iterator over mutable slice.
 /// The closure `f` is run in parallel with an element of `iter`.
-fn parallel<'a, I, T, F>(iter: I, f: F)
-        where T: 'a+Send + Sync,
-              I: Iterator<Item=&'a mut [T]>,
-              F: Fn(&mut [T]) + Sync {
-    use std::mem;
-    use std::raw::Repr;
-
-    iter.map(|chunk| {
-        // Need to convert `f` and `chunk` to something that can cross the task
-        // boundary.
-        let f = Racy(&f as *const F as *const usize);
-        let raw = Racy(chunk.repr());
-        Thread::scoped(move|| {
-            let f = f.0 as *const F;
-            unsafe { (*f)(mem::transmute(raw.0)) }
+fn parallel<'a, I: Iterator, F>(iter: I, ref f: F)
+        where I::Item: Send + 'a,
+              F: Fn(I::Item) + Sync + 'a {
+    iter.map(|x| {
+        thread::scoped(move|| {
+            f(x)
         })
     }).collect::<Vec<_>>();
 }
@@ -215,6 +201,6 @@ fn parallel<'a, I, T, F>(iter: I, f: F)
 fn main() {
     let mut data = read_to_end(&mut stdin_raw()).unwrap();
     let tables = &Tables::new();
-    parallel(mut_dna_seqs(&mut*data), |&: seq| reverse_complement(seq, tables));
-    stdout_raw().write_all(&mut*data).unwrap();
+    parallel(mut_dna_seqs(&mut data), |seq| reverse_complement(seq, tables));
+    stdout_raw().write_all(&data).unwrap();
 }
