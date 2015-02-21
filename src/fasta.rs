@@ -4,7 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(os, io, env)]
+#![feature(os, old_io, env)]
 
 use std::cmp::min;
 use std::old_io;
