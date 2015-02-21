@@ -4,35 +4,16 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(std_misc, core)]
+#![feature(core)]
 
-use std::iter::repeat;
+use std::iter::{repeat, iterate};
 use std::sync::Arc;
 use std::sync::mpsc::channel;
-use std::thread::Thread;
+use std::thread::spawn;
 
 //
 // Utilities.
 //
-
-// returns an infinite iterator of repeated applications of f to x,
-// i.e. [x, f(x), f(f(x)), ...], as haskell iterate function.
-fn iterate<T, F>(x: T, f: F) -> Iterate<T, F> where F: FnMut(&T) -> T {
-    Iterate {f: f, next: x}
-}
-struct Iterate<T, F> where F: FnMut(&T) -> T {
-    f: F,
-    next: T
-}
-impl<T, F> Iterator for Iterate<T, F> where F: FnMut(&T) -> T {
-    type Item = T;
-
-    fn next(&mut self) -> Option<T> {
-        let mut res = (self.f)(&self.next);
-        std::mem::swap(&mut res, &mut self.next);
-        Some(res)
-    }
-}
 
 // a linked list using borrowed next.
 enum List<'a, T:'a> {
@@ -44,7 +25,7 @@ struct ListIterator<'a, T:'a> {
 }
 impl<'a, T> List<'a, T> {
     fn iter(&'a self) -> ListIterator<'a, T> {
-        ListIterator{cur: self}
+        ListIterator { cur: self }
     }
 }
 impl<'a, T> Iterator for ListIterator<'a, T> {
@@ -74,7 +55,7 @@ fn transform(piece: Vec<(i32, i32)> , all: bool) -> Vec<Vec<(i32, i32)>> {
     let mut res: Vec<Vec<(i32, i32)>> =
         // rotations
         iterate(piece, |rot| rot.iter().map(|&(y, x)| (x + y, -y)).collect())
-        .take(if all {6} else {3})
+        .take(if all { 6 } else { 3 })
         // mirror
         .flat_map(|cur_piece| {
             iterate(cur_piece, |mir| mir.iter().map(|&(y, x)| (x, y)).collect())
@@ -103,9 +84,9 @@ fn mask(dy: i32, dx: i32, id: usize, p: &Vec<(i32, i32)>) -> Option<u64> {
     let mut m = 1 << (50 + id);
     for &(y, x) in p.iter() {
         let x = x + dx + (y + (dy % 2)) / 2;
-        if x < 0 || x > 4 {return None;}
+        if x < 0 || x > 4 { return None; }
         let y = y + dy;
-        if y < 0 || y > 9 {return None;}
+        if y < 0 || y > 9 { return None; }
         m |= 1 << (y * 5 + x) as usize;
     }
     Some(m)
@@ -135,7 +116,7 @@ fn make_masks() -> Vec<Vec<Vec<u64> > > {
         .map(|(id, p)| transform(p, id != 3))
         .collect();
 
-    (0i32..50).map(|yx| {
+    (0..50).map(|yx| {
         transforms.iter().enumerate().map(|(id, t)| {
             t.iter().filter_map(|p| mask(yx / 5, yx % 5, id, p)).collect()
         }).collect()
@@ -165,10 +146,10 @@ fn is_board_unfeasible(board: u64, masks: &Vec<Vec<Vec<u64>>>) -> bool {
 
 // Filter the masks that we can prove to result to unfeasible board.
 fn filter_masks(masks: &mut Vec<Vec<Vec<u64>>>) {
-    for i in (0..masks.len()) {
-        for j in (0..(*masks)[i].len()) {
+    for i in 0..masks.len() {
+        for j in 0..masks[i].len() {
             masks[i][j] =
-                (*masks)[i][j].iter().map(|&m| m)
+                masks[i][j].iter().map(|&m| m)
                 .filter(|&m| !is_board_unfeasible(m, masks))
                 .collect();
         }
@@ -177,8 +158,8 @@ fn filter_masks(masks: &mut Vec<Vec<Vec<u64>>>) {
 
 // Gets the identifier of a mask.
 fn get_id(m: u64) -> u8 {
-    for id in (0u8..10) {
-        if m & (1 << (id + 50) as usize) != 0 {return id;}
+    for id in 0..10 {
+        if m & (1 << (id + 50) as usize) != 0 { return id; }
     }
     panic!("{:016x} does not have a valid identifier", m);
 }
@@ -188,10 +169,8 @@ fn to_vec(raw_sol: &List<u64>) -> Vec<u8> {
     let mut sol = repeat('.' as u8).take(50).collect::<Vec<_>>();
     for &m in raw_sol.iter() {
         let id = '0' as u8 + get_id(m);
-        for i in (0us..50) {
-            if m & 1 << i != 0 {
-                sol[i] = id;
-            }
+        for i in 0..50 {
+            if m & 1 << i != 0 { sol[i] = id; }
         }
     }
     sol
@@ -200,7 +179,7 @@ fn to_vec(raw_sol: &List<u64>) -> Vec<u8> {
 // Prints a solution in Vec<u8> form.
 fn print_sol(sol: &Vec<u8>) {
     for (i, c) in sol.iter().enumerate() {
-        if (i) % 5 == 0 { println!(""); }
+        if i % 5 == 0 { println!(""); }
         if (i + 5) % 10 == 0 { print!(" "); }
         print!("{} ", *c as char);
     }
@@ -218,7 +197,7 @@ struct Data {
 }
 impl Data {
     fn new() -> Data {
-        Data {nb: 0, min: vec!(), max: vec!()}
+        Data { nb: 0, min: vec!(), max: vec!() }
     }
     fn reduce_from(&mut self, other: Data) {
         self.nb += other.nb;
@@ -243,10 +222,10 @@ fn handle_sol(raw_sol: &List<u64>, data: &mut Data) {
         data.max = sol1.clone();
     }
 
-    if sol1 < data.min {data.min = sol1;}
-    else if sol1 > data.max {data.max = sol1;}
-    if sol2 < data.min {data.min = sol2;}
-    else if sol2 > data.max {data.max = sol2;}
+    if sol1 < data.min { data.min = sol1; }
+    else if sol1 > data.max { data.max = sol1; }
+    if sol2 < data.min { data.min = sol2; }
+    else if sol2 > data.max { data.max = sol2; }
 }
 
 fn search(
@@ -257,13 +236,13 @@ fn search(
     data: &mut Data)
 {
     // Search for the lesser empty coordinate.
-    while board & (1 << i)  != 0 && i < 50 {i += 1;}
+    while board & (1 << i) != 0 && i < 50 { i += 1; }
     // the board is full: a solution is found.
-    if i >= 50 {return handle_sol(&cur, data);}
+    if i >= 50 { return handle_sol(&cur, data); }
     let masks_at = &masks[i];
 
     // for every unused piece
-    for id in (0us..10).filter(|&id| board & (1 << (id + 50)) == 0) {
+    for id in (0..10).filter(|&id| board & (1 << (id + 50)) == 0) {
         // for each mask that fits on the board
         for m in masks_at[id].iter().filter(|&m| board & *m == 0) {
             // This check is too costly.
@@ -279,13 +258,12 @@ fn par_search(masks: Vec<Vec<Vec<u64>>>) -> Data {
 
     // launching the search in parallel on every masks at minimum
     // coordinate (0,0)
-    for m in (*masks)[0].iter().flat_map(|masks_pos| masks_pos.iter()) {
+    for &m in masks[0].iter().flat_map(|masks_pos| masks_pos.iter()) {
         let masks = masks.clone();
         let tx = tx.clone();
-        let m = *m;
-        Thread::spawn(move|| {
+        spawn(move|| {
             let mut data = Data::new();
-            search(&*masks, m, 1, List::Cons(m, &List::Nil), &mut data);
+            search(&masks, m, 1, List::Cons(m, &List::Nil), &mut data);
             tx.send(data).unwrap();
         });
     }
