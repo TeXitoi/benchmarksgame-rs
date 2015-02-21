@@ -4,16 +4,14 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(os, core, std_misc, env)]
+#![feature(os, core, env)]
 
 #![allow(non_snake_case)]
 
 use std::iter::{repeat, AdditiveIterator};
-use std::thread::Thread;
-use std::mem;
+use std::thread;
 use std::num::Float;
 use std::os;
-use std::raw::Repr;
 use std::simd::f64x2;
 
 fn main() {
@@ -31,10 +29,10 @@ fn spectralnorm(n: usize) -> f64 {
     let mut v = u.clone();
     let mut tmp = v.clone();
     for _ in 0..10 {
-        mult_AtAv(&*u, v.as_mut_slice(), tmp.as_mut_slice());
-        mult_AtAv(&*v, u.as_mut_slice(), tmp.as_mut_slice());
+        mult_AtAv(&u, &mut v, &mut tmp);
+        mult_AtAv(&v, &mut u, &mut tmp);
     }
-    (dot(&*u, &*v) / dot(&*v, &*v)).sqrt()
+    (dot(&u, &v) / dot(&v, &v)).sqrt()
 }
 
 fn mult_AtAv(v: &[f64], out: &mut [f64], tmp: &mut [f64]) {
@@ -72,27 +70,16 @@ fn dot(v: &[f64], u: &[f64]) -> f64 {
     v.iter().zip(u.iter()).map(|(a, b)| *a * *b).sum()
 }
 
-
-struct Racy<T>(T);
-
-unsafe impl<T: 'static> Send for Racy<T> {}
-
 // Executes a closure in parallel over the given mutable slice. The closure `f`
 // is run in parallel and yielded the starting index within `v` as well as a
 // sub-slice of `v`.
-fn parallel<T, F>(v: &mut [T], f: F)
-                  where T: Send + Sync,
-                        F: Fn(usize, &mut [T]) + Sync {
+fn parallel<'a,T, F>(v: &mut [T], ref f: F)
+                  where T: Send + Sync + 'a,
+                        F: Fn(usize, &mut [T]) + Sync + 'a {
     let size = v.len() / os::num_cpus() + 1;
-
     v.chunks_mut(size).enumerate().map(|(i, chunk)| {
-        // Need to convert `f` and `chunk` to something that can cross the task
-        // boundary.
-        let f = Racy(&f as *const _ as *const usize);
-        let raw = Racy(chunk.repr());
-        Thread::scoped(move|| {
-            let f = f.0 as *const F;
-            unsafe { (*f)(i * size, mem::transmute(raw.0)) }
+        thread::scoped(move|| {
+            f(i * size, chunk)
         })
     }).collect::<Vec<_>>();
 }
