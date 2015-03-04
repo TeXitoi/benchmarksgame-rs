@@ -4,13 +4,13 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(libc, core, old_io)]
+#![feature(libc, old_io)]
 
 extern crate libc;
 
 use std::old_io::stdio::{stdin_raw, stdout_raw};
 use std::old_io::{IoResult, EndOfFile};
-use std::ptr::copy_memory;
+use std::ptr::copy;
 use std::thread;
 
 struct Tables {
@@ -145,8 +145,8 @@ fn reverse_complement(seq: &mut [u8], tables: &Tables) {
     let mut i = LINE_LEN;
     while i < len {
         unsafe {
-            copy_memory(seq.as_mut_ptr().offset((i - off + 1) as isize),
-                        seq.as_ptr().offset((i - off) as isize), off);
+            copy(seq.as_mut_ptr().offset((i - off + 1) as isize),
+                 seq.as_ptr().offset((i - off) as isize), off);
             *seq.get_unchecked_mut(i - off) = b'\n';
         }
         i += LINE_LEN + 1;

@@ -4,7 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(rustc_private, os, core, env)]
+#![feature(rustc_private, os, core)]
 
 extern crate arena;
 
@@ -73,7 +73,7 @@ fn main() {
 
     let messages = range_step(min_depth, max_depth + 1, 2).map(|depth| {
         use std::num::Int;
-        let iterations = 2.pow((max_depth - depth + min_depth) as usize);
+        let iterations = 2.pow((max_depth - depth + min_depth) as u32);
         scoped(move || inner(depth, iterations))
     }).collect::<Vec<_>>();
 

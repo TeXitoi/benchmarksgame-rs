@@ -4,7 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(core, os, old_io, env)]
+#![feature(core, os, old_io)]
 
 use std::old_io;
 use std::simd::f64x2;
