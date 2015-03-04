@@ -4,10 +4,10 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(os, old_io)]
+#![feature(os, io)]
 
 use std::cmp::min;
-use std::old_io;
+use std::io;
 use std::num::Float;
 
 const LINE_LENGTH: usize = 60;
@@ -50,9 +50,9 @@ impl<'a> Iterator for AAGen<'a> {
     }
 }
 
-fn make_fasta<W: Writer, I: Iterator<Item=u8>>(
+fn make_fasta<W: io::Write, I: Iterator<Item=u8>>(
     wr: &mut W, header: &str, mut it: I, mut n: usize)
-    -> std::old_io::IoResult<()>
+    -> io::Result<()>
 {
     try!(wr.write_all(header.as_bytes()));
     let mut line = [0u8; LINE_LENGTH + 1];
@@ -68,7 +68,7 @@ fn make_fasta<W: Writer, I: Iterator<Item=u8>>(
     Ok(())
 }
 
-fn run<W: Writer>(writer: &mut W) -> std::old_io::IoResult<()> {
+fn run<W: io::Write>(writer: &mut W) -> io::Result<()> {
     let n = std::env::args_os().nth(1)
         .and_then(|s| s.into_string().ok())
         .and_then(|n| n.parse().ok())
@@ -104,5 +104,5 @@ fn run<W: Writer>(writer: &mut W) -> std::old_io::IoResult<()> {
 }
 
 fn main() {
-    run(&mut old_io::stdout()).unwrap()
+    run(&mut io::stdout()).unwrap()
 }
