@@ -4,7 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(os, core)]
+#![feature(core)]
 
 use std::num::Float;
 

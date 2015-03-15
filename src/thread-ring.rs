@@ -4,8 +4,6 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(os)]
-
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::thread::scoped;
 

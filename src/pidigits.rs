@@ -4,7 +4,7 @@
 // Contributed by TeXitoi
 // Inspired by Mr Ledrug's C version and thestinger's rust-gmp
 
-#![feature(libc, os)]
+#![feature(libc)]
 
 #![allow(non_camel_case_types)]
 

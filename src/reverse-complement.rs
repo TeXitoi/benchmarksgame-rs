@@ -4,12 +4,11 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(libc, old_io)]
+#![feature(libc)]
 
 extern crate libc;
 
-use std::old_io::stdio::{stdin_raw, stdout_raw};
-use std::old_io::{IoResult, EndOfFile};
+use std::io::{Read, Write};
 use std::ptr::copy;
 use std::thread;
 
@@ -63,36 +62,6 @@ impl Tables {
     fn cpl16(&self, i: u16) -> u16 {
         self.table16[i as usize]
     }
-}
-
-/// Reads all remaining bytes from the stream.
-fn read_to_end<R: Reader>(r: &mut R) -> IoResult<Vec<u8>> {
-    // As reading the input stream in memory is a bottleneck, we tune
-    // Reader::read_to_end() with a fast growing policy to limit
-    // recopies.  If MREMAP_RETAIN is implemented in the linux kernel
-    // and jemalloc use it, this trick will become useless.
-    const CHUNK: usize = 64 * 1024;
-
-    let mut vec = Vec::with_capacity(CHUNK);
-    loop {
-        // workaround: very fast growing
-        let len = vec.len();
-        if vec.capacity() - len < CHUNK {
-            let cap = vec.capacity();
-            let mult = if cap < 256 * 1024 * 1024 {
-                16
-            } else {
-                2
-            };
-            vec.reserve_exact(mult * cap - len);
-        }
-        match r.push_at_least(1, CHUNK, &mut vec) {
-            Ok(_) => {}
-            Err(ref e) if e.kind == EndOfFile => break,
-            Err(e) => return Err(e)
-        }
-    }
-    Ok(vec)
 }
 
 /// Finds the first position at which `b` occurs in `s`.
@@ -199,8 +168,11 @@ fn parallel<'a, I: Iterator, F>(iter: I, ref f: F)
 }
 
 fn main() {
-    let mut data = read_to_end(&mut stdin_raw()).unwrap();
+    let stdin = std::io::stdin();
+    let mut data = Vec::with_capacity(1024 * 1024);
+    stdin.lock().read_to_end(&mut data).unwrap();
     let tables = &Tables::new();
     parallel(mut_dna_seqs(&mut data), |seq| reverse_complement(seq, tables));
-    stdout_raw().write_all(&data).unwrap();
+    let stdout = std::io::stdout();
+    stdout.lock().write_all(&data).unwrap();
 }

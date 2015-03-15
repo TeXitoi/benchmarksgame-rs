@@ -4,9 +4,6 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(box_syntax, old_io, collections, std_misc)]
-
-use std::ascii::OwnedAsciiExt;
 use std::slice;
 use std::sync::Arc;
 use std::thread::scoped;
@@ -108,11 +105,11 @@ impl Table {
     fn search_remainder<C:TableCallback>(item: &mut Entry, key: Code, c: C) {
         match item.next {
             None => {
-                let mut entry = box Entry {
+                let mut entry = Box::new(Entry {
                     code: key,
                     count: 0,
                     next: None,
-                };
+                });
                 c.f(&mut *entry);
                 item.next = Some(entry);
             }
@@ -132,11 +129,11 @@ impl Table {
 
         {
             if self.items[index as usize].is_none() {
-                let mut entry = box Entry {
+                let mut entry = Box::new(Entry {
                     code: key,
                     count: 0,
                     next: None,
-                };
+                });
                 c.f(&mut *entry);
                 self.items[index as usize] = Some(entry);
                 return;
@@ -236,7 +233,7 @@ fn print_frequencies(frequencies: &Table, frame: usize) {
 
     for &(count, key) in vector.iter().rev() {
         println!("{} {:.3}",
-                 key.unpack(frame).as_slice(),
+                 key.unpack(frame),
                  (count as f32 * 100.0) / (total_count as f32));
     }
     println!("");
@@ -246,19 +243,20 @@ fn print_occurrences(frequencies: &mut Table, occurrence: &'static str) {
     frequencies.lookup(Code::pack(occurrence), PrintCallback(occurrence))
 }
 
-fn get_sequence<R: Buffer>(r: &mut R, key: &str) -> Vec<u8> {
+fn get_sequence<R: std::io::BufRead>(r: R, key: &str) -> Vec<u8> {
     let mut res = Vec::new();
     for l in r.lines().map(|l| l.ok().unwrap())
         .skip_while(|l| key != &l[..key.len()]).skip(1)
     {
-        res.push_all(l.trim().as_bytes());
+        use std::ascii::AsciiExt;
+        res.extend(l.trim().as_bytes().iter().map(|b| b.to_ascii_uppercase()));
     }
-    res.into_ascii_uppercase()
+    res
 }
 
 fn main() {
-    let mut stdin = std::old_io::stdin();
-    let input = get_sequence(&mut *stdin.lock(), ">THREE");
+    let stdin = std::io::stdin();
+    let input = get_sequence(stdin.lock(), ">THREE");
     let input = Arc::new(input);
 
     let nb_freqs: Vec<_> = (1usize..3).map(|i| {

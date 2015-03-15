@@ -4,9 +4,9 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(core, os, old_io)]
+#![feature(core, io)]
 
-use std::old_io;
+use std::io::Write;
 use std::simd::f64x2;
 use std::sync::Arc;
 use std::thread::scoped;
@@ -16,7 +16,7 @@ const LIMIT: f64 = 2.0;
 const WORKERS: usize = 16;
 
 #[inline(always)]
-fn mandelbrot<W: old_io::Writer>(w: usize, mut out: W) -> old_io::IoResult<()> {
+fn mandelbrot<W: Write>(w: usize, mut out: W) -> std::io::Result<()> {
     assert!(WORKERS % 2 == 0);
 
     // Ensure w and h are multiples of 8.
@@ -104,7 +104,7 @@ fn mandelbrot<W: old_io::Writer>(w: usize, mut out: W) -> old_io::IoResult<()> {
         })
     }).collect::<Vec<_>>();
 
-    try!(writeln!(&mut out as &mut Writer, "P4\n{} {}", w, h));
+    try!(writeln!(&mut out, "P4\n{} {}", w, h));
     for res in data.into_iter() {
         try!(out.write_all(&res.join()));
     }
@@ -164,5 +164,6 @@ fn main() {
         .and_then(|s| s.into_string().ok())
         .and_then(|n| n.parse().ok())
         .unwrap_or(200);
-    mandelbrot(n, old_io::stdout()).unwrap();
+    let stdout = std::io::stdout();
+    mandelbrot(n, stdout.lock()).unwrap();
 }

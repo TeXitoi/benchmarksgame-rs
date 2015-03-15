@@ -4,7 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(core, os)]
+#![feature(core)]
 
 use std::{cmp, iter, mem};
 use std::thread::scoped;

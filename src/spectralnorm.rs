@@ -4,14 +4,13 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(os, core)]
+#![feature(core)]
 
 #![allow(non_snake_case)]
 
 use std::iter::{repeat, AdditiveIterator};
 use std::thread;
 use std::num::Float;
-use std::os;
 use std::simd::f64x2;
 
 fn main() {
@@ -76,7 +75,7 @@ fn dot(v: &[f64], u: &[f64]) -> f64 {
 fn parallel<'a,T, F>(v: &mut [T], ref f: F)
                   where T: Send + Sync + 'a,
                         F: Fn(usize, &mut [T]) + Sync + 'a {
-    let size = v.len() / os::num_cpus() + 1;
+    let size = v.len() / 4 + 1;
     v.chunks_mut(size).enumerate().map(|(i, chunk)| {
         thread::scoped(move|| {
             f(i * size, chunk)

@@ -4,7 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(rustc_private, os, core)]
+#![feature(rustc_private, core)]
 
 extern crate arena;
 

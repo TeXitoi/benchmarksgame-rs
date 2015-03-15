@@ -4,8 +4,6 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(os)]
-
 use self::Color::{Red, Yellow, Blue};
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::fmt;
