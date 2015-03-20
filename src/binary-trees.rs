@@ -4,11 +4,10 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(rustc_private, core)]
+#![feature(rustc_private, core, step_by)]
 
 extern crate arena;
 
-use std::iter::range_step;
 use std::thread::scoped;
 use arena::TypedArena;
 
@@ -71,7 +70,7 @@ fn main() {
     let long_lived_arena = TypedArena::new();
     let long_lived_tree = bottom_up_tree(&long_lived_arena, 0, max_depth);
 
-    let messages = range_step(min_depth, max_depth + 1, 2).map(|depth| {
+    let messages = (min_depth..max_depth + 1).step_by(2).map(|depth| {
         use std::num::Int;
         let iterations = 2.pow((max_depth - depth + min_depth) as u32);
         scoped(move || inner(depth, iterations))

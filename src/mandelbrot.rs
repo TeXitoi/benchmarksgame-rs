@@ -4,7 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(core, io)]
+#![feature(core)]
 
 use std::io::Write;
 use std::simd::f64x2;
@@ -43,7 +43,7 @@ fn mandelbrot<W: Write>(w: usize, mut out: W) -> std::io::Result<()> {
     let mut precalc_r = Vec::with_capacity(w);
     let mut precalc_i = Vec::with_capacity(h);
 
-    let precalc_futures = range(0, WORKERS).map(|i| {
+    let precalc_futures = (0..WORKERS).map(|i| {
         scoped(move|| {
             let mut rs = Vec::with_capacity(w / WORKERS);
             let mut is = Vec::with_capacity(w / WORKERS);
@@ -56,7 +56,7 @@ fn mandelbrot<W: Write>(w: usize, mut out: W) -> std::io::Result<()> {
             };
 
             // This assumes w == h
-            for x in range(start, end) {
+            for x in start..end {
                 let xf = x as f64;
                 let xy = f64x2(xf, xf);
 
@@ -81,7 +81,7 @@ fn mandelbrot<W: Write>(w: usize, mut out: W) -> std::io::Result<()> {
     let arc_init_r = Arc::new(precalc_r);
     let arc_init_i = Arc::new(precalc_i);
 
-    let data = range(0, WORKERS).map(|i| {
+    let data = (0..WORKERS).map(|i| {
         let vec_init_r = arc_init_r.clone();
         let vec_init_i = arc_init_i.clone();
 
@@ -128,7 +128,7 @@ fn write_line(init_i: f64, vec_init_r: &[f64], res: &mut Vec<u8>) {
             let mut i_sq = v_init_i * v_init_i;
 
             let mut b = 0;
-            for _ in range(0, ITER) {
+            for _ in 0..ITER {
                 let r = cur_r;
                 let i = cur_i;
 

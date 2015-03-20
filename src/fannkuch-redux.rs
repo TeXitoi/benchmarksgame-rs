@@ -4,9 +4,9 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(core)]
+#![feature(step_by)]
 
-use std::{cmp, iter, mem};
+use std::{cmp, mem};
 use std::thread::scoped;
 
 fn rotate(x: &mut [i32]) {
@@ -131,7 +131,7 @@ fn fannkuch(n: i32) -> (i32, i32) {
     let mut futures = vec![];
     let k = perm.max() / n;
 
-    for (_, j) in (0..n).zip(iter::count(0, k)) {
+    for (_, j) in (0..n).zip((0..).step_by(k)) {
         let max = cmp::min(j+k, perm.max());
 
         futures.push(scoped(move|| {

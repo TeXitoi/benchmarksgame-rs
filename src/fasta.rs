@@ -4,8 +4,6 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(io)]
-
 use std::cmp::min;
 use std::io;
 use std::num::Float;
