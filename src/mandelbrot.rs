@@ -8,7 +8,6 @@
 
 use std::io::Write;
 use std::simd::f64x2;
-use std::sync::Arc;
 use std::thread::scoped;
 
 const ITER: i32 = 50;
@@ -78,16 +77,12 @@ fn mandelbrot<W: Write>(w: usize, mut out: W) -> std::io::Result<()> {
     assert_eq!(precalc_r.len(), w);
     assert_eq!(precalc_i.len(), h);
 
-    let arc_init_r = Arc::new(precalc_r);
-    let arc_init_i = Arc::new(precalc_i);
+    let vec_init_r = &precalc_r;
+    let vec_init_i = &precalc_i;
 
     let data = (0..WORKERS).map(|i| {
-        let vec_init_r = arc_init_r.clone();
-        let vec_init_i = arc_init_i.clone();
-
         scoped(move|| {
             let mut res: Vec<u8> = Vec::with_capacity((chunk_size * w) / 8);
-            let init_r_slice = vec_init_r.as_slice();
 
             let start = i * chunk_size;
             let end = if i == (WORKERS - 1) {
@@ -97,7 +92,7 @@ fn mandelbrot<W: Write>(w: usize, mut out: W) -> std::io::Result<()> {
             };
 
             for &init_i in vec_init_i[start..end].iter() {
-                write_line(init_i, init_r_slice, &mut res);
+                write_line(init_i, &vec_init_r, &mut res);
             }
 
             res
