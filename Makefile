@@ -13,9 +13,9 @@ clean:
 distclean: clean
 	rm -fr bin out
 
-diff/chameneos-redux.diff: out/chameneos-redux.txt ref/chameneos-redux.txt
+diff/chameneos_redux.diff: out/chameneos_redux.txt ref/chameneos_redux.txt
 	mkdir -p diff
-	sed -r 's/^[0-9]+/42/' $< | diff -u ref/chameneos-redux.txt - > $@
+	sed -r 's/^[0-9]+/42/' $< | diff -u ref/chameneos_redux.txt - > $@
 
 bin/%: src/%.rs
 	mkdir -p bin
