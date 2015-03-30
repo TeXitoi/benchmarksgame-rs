@@ -224,7 +224,7 @@ fn print_frequencies(frequencies: &Table, frame: usize) {
     for entry in frequencies.iter() {
         vector.push((entry.count, entry.code));
     }
-    vector.as_mut_slice().sort();
+    vector.sort();
 
     let mut total_count = 0;
     for &(count, _) in vector.iter() {

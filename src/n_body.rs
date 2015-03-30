@@ -72,7 +72,7 @@ impl Copy for Planet {}
 
 fn advance(bodies: &mut [Planet;N_BODIES], dt: f64, steps: i32) {
     for _ in (0..steps) {
-        let mut b_slice = bodies.as_mut_slice();
+        let mut b_slice: &mut [_] = bodies;
         loop {
             let bi = match shift_mut_ref(&mut b_slice) {
                 Some(bi) => bi,
