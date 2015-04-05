@@ -4,11 +4,18 @@
 // Contributed by TeXitoi
 // Inspired by Mr Ledrug's C version and thestinger's rust-gmp
 
-#![feature(libc)]
-
 #![allow(non_camel_case_types)]
 
-extern crate libc;
+//extern crate libc;
+// exporting needed things from libc for linux x64 (still unstable)
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+mod libc {
+    #![allow(non_camel_case_types)]
+    #[repr(u8)]
+    pub enum c_void { __variant1, __variant2 }
+    pub type c_int = i32;
+    pub type c_ulong = u64;
+}
 
 use libc::{c_int, c_ulong, c_void};
 use std::mem::uninitialized;

@@ -4,10 +4,6 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(core)]
-
-use std::num::Float;
-
 const PI: f64 = 3.141592653589793;
 const SOLAR_MASS: f64 = 4.0 * PI * PI;
 const YEAR: f64 = 365.24;
@@ -62,13 +58,12 @@ static BODIES: [Planet;N_BODIES] = [
     },
 ];
 
+#[derive(Clone, Copy)]
 struct Planet {
     x: f64, y: f64, z: f64,
     vx: f64, vy: f64, vz: f64,
     mass: f64,
 }
-
-impl Copy for Planet {}
 
 fn advance(bodies: &mut [Planet;N_BODIES], dt: f64, steps: i32) {
     for _ in (0..steps) {
@@ -154,19 +149,11 @@ fn main() {
 }
 
 /// Pop a mutable reference off the head of a slice, mutating the slice to no
-/// longer contain the mutable reference. This is a safe operation because the
-/// two mutable borrows are entirely disjoint.
+/// longer contain the mutable reference.
 fn shift_mut_ref<'a, T>(r: &mut &'a mut [T]) -> Option<&'a mut T> {
-    use std::mem;
-    use std::raw::Repr;
-
     if r.len() == 0 { return None }
-    unsafe {
-        let mut raw = r.repr();
-        let ret = raw.data as *mut T;
-        raw.data = raw.data.offset(1);
-        raw.len -= 1;
-        *r = mem::transmute(raw);
-        Some({ &mut *ret })
-    }
+    let tmp = std::mem::replace(r, &mut []);
+    let (h, t) = tmp.split_at_mut(1);
+    *r = t;
+    Some(&mut h[0])
 }

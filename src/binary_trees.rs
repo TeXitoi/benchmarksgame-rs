@@ -4,7 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(rustc_private, core, step_by)]
+#![feature(rustc_private, step_by)]
 
 extern crate arena;
 
@@ -71,8 +71,7 @@ fn main() {
     let long_lived_tree = bottom_up_tree(&long_lived_arena, 0, max_depth);
 
     let messages = (min_depth..max_depth + 1).step_by(2).map(|depth| {
-        use std::num::Int;
-        let iterations = 2.pow((max_depth - depth + min_depth) as u32);
+        let iterations = 1 << ((max_depth - depth + min_depth) as u32);
         scoped(move || inner(depth, iterations))
     }).collect::<Vec<_>>();
 

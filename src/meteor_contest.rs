@@ -4,9 +4,7 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(core)]
-
-use std::iter::{repeat, iterate};
+use std::iter::repeat;
 use std::sync::Arc;
 use std::sync::mpsc::channel;
 use std::thread::spawn;
@@ -14,6 +12,22 @@ use std::thread::spawn;
 //
 // Utilities.
 //
+
+// returns an infinite iterator of repeated applications of f to x,
+// i.e. [x, f(x), f(f(x)), ...], as haskell iterate function.
+fn iterate<T, F>(x: T, f: F) -> Iterate<T, F> where F: FnMut(&T) -> T {
+    Iterate { f: f, next: x }
+}
+struct Iterate<T, F> where F: FnMut(&T) -> T { f: F, next: T }
+impl<T, F> Iterator for Iterate<T, F> where F: FnMut(&T) -> T {
+    type Item = T;
+
+    fn next(&mut self) -> Option<T> {
+        let mut res = (self.f)(&self.next);
+        std::mem::swap(&mut res, &mut self.next);
+        Some(res)
+    }
+}
 
 // a linked list using borrowed next.
 enum List<'a, T:'a> {

@@ -4,8 +4,6 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(step_by)]
-
 use std::{cmp, mem};
 use std::thread::scoped;
 
@@ -29,12 +27,12 @@ fn next_permutation(perm: &mut [i32], count: &mut [i32]) {
     }
 }
 
+#[derive(Clone, Copy)]
 struct P {
     p: [i32; 16],
 }
 
-impl Copy for P {}
-
+#[derive(Clone, Copy)]
 struct Perm {
     cnt: [i32; 16],
     fact: [u32; 16],
@@ -42,8 +40,6 @@ struct Perm {
     permcount: u32,
     perm: P,
 }
-
-impl Copy for Perm {}
 
 impl Perm {
     fn new(n: u32) -> Perm {
@@ -131,7 +127,7 @@ fn fannkuch(n: i32) -> (i32, i32) {
     let mut futures = vec![];
     let k = perm.max() / n;
 
-    for (_, j) in (0..n).zip((0..).step_by(k)) {
+    for j in (0..).map(|x| x * k).take_while(|&j| j < k * n) {
         let max = cmp::min(j+k, perm.max());
 
         futures.push(scoped(move|| {

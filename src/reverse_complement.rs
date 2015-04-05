@@ -4,9 +4,17 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(libc)]
-
-extern crate libc;
+//extern crate libc;
+// exporting needed things from libc for linux x64 (still unstable)
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+mod libc {
+    #![allow(non_camel_case_types)]
+    #[repr(u8)]
+    pub enum c_void { __variant1, __variant2 }
+    pub type c_int = i32;
+    pub type size_t = u64;
+    extern { pub fn memchr(cx: *const c_void, c: c_int, n: size_t) -> *mut c_void; }
+}
 
 use std::io::{Read, Write};
 use std::ptr::copy;
@@ -114,8 +122,8 @@ fn reverse_complement(seq: &mut [u8], tables: &Tables) {
     let mut i = LINE_LEN;
     while i < len {
         unsafe {
-            copy(seq.as_mut_ptr().offset((i - off + 1) as isize),
-                 seq.as_ptr().offset((i - off) as isize), off);
+            copy(seq.as_ptr().offset((i - off) as isize),
+                 seq.as_mut_ptr().offset((i - off + 1) as isize), off);
             *seq.get_unchecked_mut(i - off) = b'\n';
         }
         i += LINE_LEN + 1;

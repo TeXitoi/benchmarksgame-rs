@@ -10,7 +10,6 @@
 
 use std::iter::{repeat, AdditiveIterator};
 use std::thread;
-use std::num::Float;
 use std::simd::f64x2;
 
 fn main() {

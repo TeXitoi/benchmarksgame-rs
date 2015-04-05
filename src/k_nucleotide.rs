@@ -21,10 +21,8 @@ static OCCURRENCES: [&'static str;5] = [
 
 // Code implementation
 
-#[derive(PartialEq, PartialOrd, Ord, Eq)]
+#[derive(PartialEq, PartialOrd, Ord, Eq, Clone, Copy)]
 struct Code(u64);
-
-impl Copy for Code {}
 
 impl Code {
     fn hash(&self) -> u64 {
