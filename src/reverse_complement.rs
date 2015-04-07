@@ -6,13 +6,14 @@
 
 //extern crate libc;
 // exporting needed things from libc for linux x64 (still unstable)
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[cfg(all(target_os = "linux", any(target_arch = "x86_64", target_arch = "x86")))]
 mod libc {
     #![allow(non_camel_case_types)]
     #[repr(u8)]
     pub enum c_void { __variant1, __variant2 }
     pub type c_int = i32;
-    pub type size_t = u64;
+    #[cfg(target_arch = "x86_64")] pub type size_t = u64;
+    #[cfg(target_arch = "x86")] pub type size_t = u32;
     extern { pub fn memchr(cx: *const c_void, c: c_int, n: size_t) -> *mut c_void; }
 }
 
