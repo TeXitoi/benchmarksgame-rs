@@ -6,7 +6,6 @@
 
 use std::cmp::min;
 use std::io;
-use std::num::Float;
 
 const LINE_LENGTH: usize = 60;
 const IM: u32 = 139968;
