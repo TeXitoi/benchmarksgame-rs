@@ -8,7 +8,7 @@
 
 #![allow(non_snake_case)]
 
-use std::iter::{repeat, AdditiveIterator};
+use std::iter::repeat;
 use std::thread;
 use std::simd::f64x2;
 
