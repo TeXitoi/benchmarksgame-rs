@@ -5,7 +5,7 @@
 // contributed by TeXitoi
 
 use std::{cmp, mem};
-use std::thread::scoped;
+use std::thread;
 
 fn rotate(x: &mut [i32]) {
     let mut prev = x[0];
@@ -130,7 +130,7 @@ fn fannkuch(n: i32) -> (i32, i32) {
     for j in (0..).map(|x| x * k).take_while(|&j| j < k * n) {
         let max = cmp::min(j+k, perm.max());
 
-        futures.push(scoped(move|| {
+        futures.push(thread::scoped(move|| {
             work(perm, j as usize, max as usize)
         }))
     }

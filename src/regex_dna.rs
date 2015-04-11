@@ -2,36 +2,28 @@
 // http://benchmarksgame.alioth.debian.org/
 //
 // contributed by the Rust Project Developers
+// contributed by BurntSushi
 // contributed by TeXitoi
 
 extern crate regex;
 
-use std::io;
-use regex::{NoExpand, Regex};
-use std::sync::{Arc, Future};
+use std::io::{self, Read};
+use std::sync::Arc;
+use std::thread;
+use regex::NoExpand;
 
-macro_rules! regex {
-    ($e:expr) => (Regex::new($e).unwrap())
-}
-
-fn count_matches(seq: &str, variant: &Regex) -> i32 {
-    let mut n = 0;
-    for _ in variant.find_iter(seq) {
-        n += 1;
-    }
-    n
-}
+macro_rules! regex { ($re:expr) => (::regex::Regex::new($re).unwrap()); }
 
 fn main() {
-    let mut rdr = io::stdin();
-    let mut seq = rdr.read_to_string().unwrap();
+    let mut seq = String::new();
+    io::stdin().read_to_string(&mut seq).unwrap();
     let ilen = seq.len();
 
-    seq = regex!(">[^\n]*\n|\n").replace_all(&*seq, NoExpand(""));
+    seq = regex!(">[^\n]*\n|\n").replace_all(&seq, NoExpand(""));
     let seq_arc = Arc::new(seq.clone()); // copy before it moves
     let clen = seq.len();
 
-    let mut seqlen = Future::spawn(move|| {
+    let seqlen = thread::scoped(move|| {
         let substs = vec![
             (regex!("B"), "(c|g|t)"),
             (regex!("D"), "(a|g|t)"),
@@ -47,7 +39,7 @@ fn main() {
         ];
         let mut seq = seq;
         for (re, replacement) in substs.into_iter() {
-            seq = re.replace_all(&*seq, NoExpand(replacement));
+            seq = re.replace_all(&seq, NoExpand(replacement));
         }
         seq.len()
     });
@@ -67,16 +59,18 @@ fn main() {
     for variant in variants.into_iter() {
         let seq_arc_copy = seq_arc.clone();
         variant_strs.push(variant.to_string());
-        counts.push(Future::spawn(move|| {
-            count_matches(&**seq_arc_copy, &variant)
+        counts.push(thread::scoped(move|| {
+            variant.find_iter(&seq_arc_copy).count()
         }));
     }
 
-    for (i, variant) in variant_strs.iter().enumerate() {
-        println!("{} {}", variant, counts[i].get());
+    let mut olines = Vec::new();
+    for (variant, count) in variant_strs.iter().zip(counts.into_iter()) {
+        olines.push(format!("{} {}", variant, count.join()));
     }
-    println!("");
-    println!("{}", ilen);
-    println!("{}", clen);
-    println!("{}", seqlen.get());
+    olines.push("".to_string());
+    olines.push(format!("{}", ilen));
+    olines.push(format!("{}", clen));
+    olines.push(format!("{}", seqlen.join()));
+    println!("{}", olines.connect("\n"));
 }
