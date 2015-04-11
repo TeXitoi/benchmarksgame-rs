@@ -6,7 +6,7 @@
 
 use std::slice;
 use std::sync::Arc;
-use std::thread::scoped;
+use std::thread;
 
 static TABLE: [u8;4] = [ 'A' as u8, 'C' as u8, 'G' as u8, 'T' as u8 ];
 static TABLE_SIZE: usize = 2 << 16;
@@ -259,11 +259,11 @@ fn main() {
 
     let nb_freqs: Vec<_> = (1usize..3).map(|i| {
         let input = input.clone();
-        (i, scoped(move|| generate_frequencies(&input, i)))
+        (i, thread::scoped(move|| generate_frequencies(&input, i)))
     }).collect();
     let occ_freqs: Vec<_> = OCCURRENCES.iter().map(|&occ| {
         let input = input.clone();
-        scoped(move|| generate_frequencies(&input, occ.len()))
+        thread::scoped(move|| generate_frequencies(&input, occ.len()))
     }).collect();
 
     for (i, freq) in nb_freqs.into_iter() {
