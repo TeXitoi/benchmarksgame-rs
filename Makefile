@@ -1,6 +1,7 @@
 SOURCES = $(wildcard src/*.rs)
 RUSTC ?= rustc
-RUSTC_FLAGS ?= -C opt-level=3 -C target-cpu=core2 -C lto
+RUSTC_FLAGS ?= -C opt-level=3 -C target-cpu=core2 -C lto -L ./lib
+REGEX_VERSION ?= 0.1.30
 
 .PHONY: all distclean clean
 .SECONDARY:
@@ -11,21 +12,22 @@ clean:
 	rm -fr diff
 
 distclean: clean
-	rm -fr bin out tmp
+	rm -fr bin out tmp lib
 
 diff/chameneos_redux.diff: out/chameneos_redux.txt ref/chameneos_redux.txt
 	mkdir -p diff
 	sed -r 's/^[0-9]+/42/' $< | diff -u ref/chameneos_redux.txt - > $@
 
-bin/regex_dna: src/regex_dna.rs tmp/.stamp_cargo_regex
-	mkdir -p bin
-	$(RUSTC) $(RUSTC_FLAGS) -L ./tmp/regex/target/release $< -o $@
+bin/regex_dna: src/regex_dna.rs lib/.regex_install
 
-tmp/.stamp_cargo_regex:
+lib/.regex_install:
 	mkdir -p tmp
-	git clone -b 0.1.27 git://github.com/rust-lang/regex tmp/regex
-	cargo build --release --manifest-path tmp/regex/Cargo.toml
-	@touch tmp/.stamp_cargo_regex
+	curl -s -L https://crates.io/api/v1/crates/regex/$(REGEX_VERSION)/download > tmp/regex-$(REGEX_VERSION).crate
+	tar -C tmp/ -xzf tmp/regex-$(REGEX_VERSION).crate
+	cargo build --release --manifest-path tmp/regex-$(REGEX_VERSION)/Cargo.toml
+	mkdir -p lib
+	cp tmp/regex-$(REGEX_VERSION)/target/release/*.rlib lib/
+	@touch lib/.regex_install
 
 bin/%: src/%.rs
 	mkdir -p bin
