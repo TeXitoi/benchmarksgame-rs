@@ -23,7 +23,7 @@ fn main() {
     let seq_arc = Arc::new(seq.clone()); // copy before it moves
     let clen = seq.len();
 
-    let seqlen = thread::scoped(move|| {
+    let seqlen = thread::spawn(move|| {
         let substs = vec![
             (regex!("B"), "(c|g|t)"),
             (regex!("D"), "(a|g|t)"),
@@ -59,18 +59,18 @@ fn main() {
     for variant in variants.into_iter() {
         let seq_arc_copy = seq_arc.clone();
         variant_strs.push(variant.to_string());
-        counts.push(thread::scoped(move|| {
+        counts.push(thread::spawn(move|| {
             variant.find_iter(&seq_arc_copy).count()
         }));
     }
 
     let mut olines = Vec::new();
     for (variant, count) in variant_strs.iter().zip(counts.into_iter()) {
-        olines.push(format!("{} {}", variant, count.join()));
+        olines.push(format!("{} {}", variant, count.join().unwrap()));
     }
     olines.push("".to_string());
     olines.push(format!("{}", ilen));
     olines.push(format!("{}", clen));
-    olines.push(format!("{}", seqlen.join()));
+    olines.push(format!("{}", seqlen.join().unwrap()));
     println!("{}", olines.connect("\n"));
 }
