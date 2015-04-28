@@ -164,16 +164,27 @@ fn reverse_complement(seq: &mut [u8], tables: &Tables) {
     }
 }
 
+struct Racy<T>(T);
+unsafe impl<T: 'static> Send for Racy<T> {}
+
 /// Executes a closure in parallel over the given iterator over mutable slice.
 /// The closure `f` is run in parallel with an element of `iter`.
-fn parallel<'a, I: Iterator, F>(iter: I, ref f: F)
-        where I::Item: Send + 'a,
-              F: Fn(I::Item) + Sync + 'a {
-    iter.map(|x| {
-        thread::scoped(move|| {
-            f(x)
+fn parallel<'a, I, T, F>(iter: I, ref f: F)
+        where T: 'static + Send + Sync,
+              I: Iterator<Item=&'a mut [T]>,
+              F: Fn(&mut [T]) + Sync {
+    let jhs = iter.map(|chunk| {
+        // Need to convert `f` and `chunk` to something that can cross the task
+        // boundary.
+        let f = Racy(f as *const F as *const usize);
+        let raw = Racy((&mut chunk[0] as *mut T, chunk.len()));
+        thread::spawn(move|| {
+            let f = f.0 as *const F;
+            let raw = raw.0;
+            unsafe { (*f)(std::slice::from_raw_parts_mut(raw.0, raw.1)) }
         })
     }).collect::<Vec<_>>();
+    for jh in jhs { jh.join().unwrap(); }
 }
 
 fn main() {
