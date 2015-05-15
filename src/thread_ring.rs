@@ -5,7 +5,7 @@
 // contributed by TeXitoi
 
 use std::sync::mpsc::{channel, Sender, Receiver};
-use std::thread::scoped;
+use std::thread;
 
 fn start(n_tasks: i32, token: i32) {
     let (tx, mut rx) = channel();
@@ -14,9 +14,10 @@ fn start(n_tasks: i32, token: i32) {
     for i in 2 .. n_tasks + 1 {
         let (tx, next_rx) = channel();
         let cur_rx = std::mem::replace(&mut rx, next_rx);
-        guards.push(scoped(move|| roundtrip(i, tx, cur_rx)));
+        guards.push(thread::spawn(move|| roundtrip(i, tx, cur_rx)));
     }
-    let _guard = scoped(move|| roundtrip(1, tx, rx));
+    guards.push(thread::spawn(move|| roundtrip(1, tx, rx)));
+    for g in guards { g.join().unwrap(); }
 }
 
 fn roundtrip(id: i32, tx: Sender<i32>, rx: Receiver<i32>) {
