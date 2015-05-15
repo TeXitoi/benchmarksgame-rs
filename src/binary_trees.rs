@@ -4,12 +4,10 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(rustc_private, step_by)]
+extern crate typed_arena;
 
-extern crate arena;
-
-use std::thread::scoped;
-use arena::TypedArena;
+use std::thread;
+use typed_arena::Arena;
 
 struct Tree<'a> {
     l: Option<&'a Tree<'a>>,
@@ -24,7 +22,7 @@ fn item_check(t: &Option<&Tree>) -> i32 {
     }
 }
 
-fn bottom_up_tree<'r>(arena: &'r TypedArena<Tree<'r>>, item: i32, depth: i32)
+fn bottom_up_tree<'r>(arena: &'r Arena<Tree<'r>>, item: i32, depth: i32)
                   -> Option<&'r Tree<'r>> {
     if depth > 0 {
         let t: &Tree<'r> = arena.alloc(Tree {
@@ -41,7 +39,7 @@ fn bottom_up_tree<'r>(arena: &'r TypedArena<Tree<'r>>, item: i32, depth: i32)
 fn inner(depth: i32, iterations: i32) -> String {
     let mut chk = 0;
     for i in 1 .. iterations + 1 {
-        let arena = TypedArena::new();
+        let arena = Arena::new();
         let a = bottom_up_tree(&arena, i, depth);
         let b = bottom_up_tree(&arena, -i, depth);
         chk += item_check(&a) + item_check(&b);
@@ -59,7 +57,7 @@ fn main() {
     let max_depth = if min_depth + 2 > n {min_depth + 2} else {n};
 
     {
-        let arena = TypedArena::new();
+        let arena = Arena::new();
         let depth = max_depth + 1;
         let tree = bottom_up_tree(&arena, 0, depth);
 
@@ -67,16 +65,16 @@ fn main() {
                  depth, item_check(&tree));
     }
 
-    let long_lived_arena = TypedArena::new();
+    let long_lived_arena = Arena::new();
     let long_lived_tree = bottom_up_tree(&long_lived_arena, 0, max_depth);
 
-    let messages = (min_depth..max_depth + 1).step_by(2).map(|depth| {
+    let messages = (min_depth..max_depth + 1).filter(|&d| d % 2 == 0).map(|depth| {
         let iterations = 1 << ((max_depth - depth + min_depth) as u32);
-        scoped(move || inner(depth, iterations))
+        thread::spawn(move || inner(depth, iterations))
     }).collect::<Vec<_>>();
 
     for message in messages.into_iter() {
-        println!("{}", message.join());
+        println!("{}", message.join().unwrap());
     }
 
     println!("long lived tree of depth {}\t check: {}",

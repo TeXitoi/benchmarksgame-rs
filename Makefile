@@ -3,6 +3,7 @@ RUSTC ?= rustc
 RUSTC_FLAGS ?= -C opt-level=3 -C target-cpu=core2 -C lto
 RUSTC_FLAGS += -L ./lib
 REGEX ?= regex-0.1.30
+ARENA ?= typed-arena-1.0.1
 
 .PHONY: all distclean clean
 .SECONDARY:
@@ -20,6 +21,8 @@ diff/chameneos_redux.diff: out/chameneos_redux.txt ref/chameneos_redux.txt
 	sed -r 's/^[0-9]+/42/' $< | diff -u ref/chameneos_redux.txt - > $@
 
 bin/regex_dna: src/regex_dna.rs lib/$(REGEX).pkg
+
+bin/binary_trees: src/binary_trees.rs lib/$(ARENA).pkg
 
 lib/%.pkg:
 	mkdir -p tmp
