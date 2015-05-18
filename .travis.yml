@@ -1,4 +1,8 @@
 language: rust
+rust:
+  - nightly
+  - beta
+  - stable
 before_script:
   - sudo apt-get update -q
   - sudo apt-get install libgmp-dev
