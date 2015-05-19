@@ -6,7 +6,7 @@
 
 use std::io::Write;
 use std::thread;
-const THREADS: usize = 8;
+const THREADS: usize = 20;
 const MAX_ITER: usize = 50;
 const VLEN: usize = 8;
 const ZEROS: Vecf64 = [0.0; VLEN];
