@@ -15,12 +15,12 @@ pub type Vecf64 = [f64; VLEN];
 
 fn mul2 (x: Vecf64, y: Vecf64) -> Vecf64 {
     let mut res = ZEROS;
-    for i in 0..VLEN {res[i] = x[i] * y[i];}
+    for i in 0..VLEN { res[i] = x[i] * y[i]; }
     res
 }
 fn add2 (x: Vecf64, y: Vecf64) -> Vecf64 {
     let mut res = ZEROS;
-    for i in 0..VLEN {res[i] = x[i] + y[i];}
+    for i in 0..VLEN { res[i] = x[i] + y[i]; }
     res
 }
 fn sub2 (x: Vecf64, y: Vecf64) -> Vecf64 {
@@ -42,10 +42,10 @@ pub fn mbrot8(cr: Vecf64, ci: Vecf64) -> u8 {
         // same byte as output
         let mag = add2(rr, ii);
         for i in 0..VLEN {
-            if mag[i] > 4.0 {esc_bits |= 128 >> i}
+            if mag[i] > 4.0 { esc_bits |= 128 >> i; }
         }
         // If no more work, break early
-        if esc_bits == 0xff {break}
+        if esc_bits == 0xff { break; }
         // Find Im(z^2)
         let ir = mul2(zr, zi);
         // Set Re(z^2)
@@ -60,7 +60,6 @@ pub fn mbrot8(cr: Vecf64, ci: Vecf64) -> u8 {
 }
 
 fn main() {
-
     let size = std::env::args_os().nth(1)
         .and_then(|s| s.into_string().ok())
         .and_then(|n| n.parse().ok())
@@ -74,23 +73,24 @@ fn main() {
     }
     let xloc = &xvals;
     let yloc = &yvals;
-    
+
+    assert!(size % THREADS == 0);// FIXME
     let handles: Vec<_> = (0..THREADS).map(|e| {
         let xloc = xloc.to_vec();
         let yloc = yloc.to_vec();
         thread::spawn(move || {
-        let mut rows = vec![vec![0 as u8; size / 8]; size / THREADS];
-        for y in 0..size / THREADS {
-            for x in 0..size / 8 {
-                let mut cr = ZEROS;
-                let ci = [yloc[y + e * size / THREADS]; VLEN];
-                for i in 0..VLEN {
-                    cr[i] = xloc[8 * x + i];
+            let mut rows = vec![vec![0 as u8; size / 8]; size / THREADS];
+            for y in 0..size / THREADS {
+                for x in 0..size / 8 {
+                    let mut cr = ZEROS;
+                    let ci = [yloc[y + e * size / THREADS]; VLEN];
+                    for i in 0..VLEN {
+                        cr[i] = xloc[8 * x + i];
+                    }
+                    rows[y][x] = mbrot8(cr, ci);
                 }
-                rows[y][x] = mbrot8(cr, ci);
             }
-        }
-        rows
+            rows
         })
     }).collect();
 
