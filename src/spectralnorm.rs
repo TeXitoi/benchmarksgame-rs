@@ -4,13 +4,27 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-#![feature(core)]
-
 #![allow(non_snake_case)]
 
 use std::iter::repeat;
 use std::thread;
-use std::simd::f64x2;
+
+// As std::simd::f64x2 is unstable, we provide a similar interface,
+// expecting llvm to autovectorize its usage.
+#[allow(non_camel_case_types)]
+struct f64x2(f64, f64);
+impl std::ops::Add for f64x2 {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self {
+        f64x2(self.0 + rhs.0, self.1 + rhs.1)
+    }
+}
+impl std::ops::Div for f64x2 {
+    type Output = Self;
+    fn div(self, rhs: Self) -> Self {
+        f64x2(self.0 / rhs.0, self.1 / rhs.1)
+    }
+}
 
 fn main() {
     let n = std::env::args_os().nth(1)
@@ -53,7 +67,7 @@ fn mult<F>(v: &[f64], out: &mut [f64], start: usize, a: F)
         for (j, chunk) in v.chunks(2).enumerate().map(|(j, s)| (2 * j, s)) {
             let top = f64x2(chunk[0], chunk[1]);
             let bot = f64x2(a(i, j), a(i, j + 1));
-            sum += top / bot;
+            sum = sum + top / bot;
         }
         let f64x2(a, b) = sum;
         *slot = a + b;
@@ -65,19 +79,29 @@ fn A(i: usize, j: usize) -> f64 {
 }
 
 fn dot(v: &[f64], u: &[f64]) -> f64 {
-    v.iter().zip(u.iter()).map(|(a, b)| *a * *b).sum()
+    v.iter().zip(u.iter()).map(|(a, b)| *a * *b).fold(0., |acc, i| acc + i)
 }
+
+struct Racy<T>(T);
+unsafe impl<T: 'static> Send for Racy<T> {}
 
 // Executes a closure in parallel over the given mutable slice. The closure `f`
 // is run in parallel and yielded the starting index within `v` as well as a
 // sub-slice of `v`.
-fn parallel<'a,T, F>(v: &mut [T], ref f: F)
-                  where T: Send + Sync + 'a,
-                        F: Fn(usize, &mut [T]) + Sync + 'a {
+fn parallel<'a, T, F>(v: &mut [T], ref f: F)
+    where T: 'static + Send + Sync,
+          F: Fn(usize, &mut [T]) + Sync {
     let size = v.len() / 4 + 1;
-    v.chunks_mut(size).enumerate().map(|(i, chunk)| {
-        thread::scoped(move|| {
-            f(i * size, chunk)
+    let jhs = v.chunks_mut(size).enumerate().map(|(i, chunk)| {
+        // Need to convert `f` and `chunk` to something that can cross the task
+        // boundary.
+        let f = Racy(f as *const F as *const usize);
+        let raw = Racy((&mut chunk[0] as *mut T, chunk.len()));
+        thread::spawn(move|| {
+            let f = f.0 as *const F;
+            let raw = raw.0;
+            unsafe { (*f)(i * size, std::slice::from_raw_parts_mut(raw.0, raw.1)) }
         })
     }).collect::<Vec<_>>();
+    for jh in jhs { jh.join().unwrap(); }
 }
