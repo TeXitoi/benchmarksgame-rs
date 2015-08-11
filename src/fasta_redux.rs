@@ -2,6 +2,7 @@
 // http://benchmarksgame.alioth.debian.org/
 //
 // contributed by the Rust Project Developers
+// contributed by llogiq
 // contributed by TeXitoi
 
 use std::cmp::min;
