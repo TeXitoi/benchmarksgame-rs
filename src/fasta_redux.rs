@@ -3,7 +3,7 @@
 //
 // contributed by the Rust Project Developers
 // contributed by llogiq
-// contributed by teXitoi
+// contributed by TeXitoi
 
 use std::cmp::min;
 use std::env;
