@@ -9,11 +9,16 @@ to which I made the following modifications to be published:
    contributor line because I propose the program as asked by the
    site);
  - removing the rust test framework specific code;
+ - make it stable compliant (most of the time by adding crates);
  - possibly removing warnings or other **trivial** modifications.
 
 If you want to contribute, please propose your version first to the
 official rust repository, and then propose a pull request here.
 
-There is a specific exception: pidigits.  I have a special version
-that is not provided by the rust repo because it depends on GMP, thus
-you can propose directly a pull request here.
+There is some exceptions:
+ - pidigits.  I have a special version that is not provided by the
+   rust repo because it depends on GMP.
+ - mandelbrot and spectralnorm have specific version because of
+   `feature(simd)`.
+ - regex-dna, see https://github.com/rust-lang/regex/blob/master/examples/shootout-regex-dna.rs
+You can propose directly a pull request here for these implementations if relevent.
