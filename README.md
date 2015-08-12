@@ -21,4 +21,5 @@ There is some exceptions:
  - mandelbrot and spectralnorm have specific version because of
    `feature(simd)`.
  - regex-dna, see https://github.com/rust-lang/regex/blob/master/examples/shootout-regex-dna.rs
+
 You can propose directly a pull request here for these implementations if relevent.
