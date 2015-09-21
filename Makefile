@@ -20,9 +20,18 @@ diff/chameneos_redux.diff: out/chameneos_redux.txt ref/chameneos_redux.txt
 	mkdir -p diff
 	sed -r 's/^[0-9]+/42/' $< | diff -u ref/chameneos_redux.txt - > $@
 
-bin/regex_dna: src/regex_dna.rs lib/$(REGEX).pkg
-
 bin/binary_trees: src/binary_trees.rs lib/$(ARENA).pkg
+
+bin/regex_dna: src/regex_dna.rs lib/regex.dep
+
+lib/regex.dep:
+	rm -rf tmp/regex-dna
+	cargo new tmp/regex-dna
+	@echo '\n[dependencies]\nregex = "0.1.41"' >> tmp/regex-dna/Cargo.toml
+	cargo build --release --manifest-path tmp/regex-dna/Cargo.toml
+	mkdir -p lib
+	cp tmp/regex-dna/target/release/deps/* lib/
+	@touch lib/regex.dep
 
 lib/%.pkg:
 	mkdir -p tmp

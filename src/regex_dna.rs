@@ -72,5 +72,5 @@ fn main() {
     olines.push(format!("{}", ilen));
     olines.push(format!("{}", clen));
     olines.push(format!("{}", seqlen.join().unwrap()));
-    println!("{}", olines.connect("\n"));
+    println!("{}", olines.join("\n"));
 }
