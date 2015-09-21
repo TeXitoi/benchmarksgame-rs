@@ -8,6 +8,7 @@
 use std::cmp::min;
 use std::env;
 use std::io;
+use std::io::BufWriter;
 use std::io::prelude::*;
 
 const LINE_LEN: usize = 60;
@@ -57,7 +58,7 @@ static HOMO_SAPIENS: [AminoAcid;4] = [
 fn sum_and_scale(a: &'static [AminoAcid]) -> Vec<AminoAcid> {
     let mut p = 0f32;
     let mut result: Vec<AminoAcid> = a.iter().map(|a_i| {
-        p += a_i.p; 
+        p += a_i.p;
         AminoAcid { c: a_i.c, p: p * LOOKUP_SCALE }
     }).collect();
     let result_len = result.len();
@@ -146,7 +147,7 @@ impl<'a, W: Write> RandomFasta<'a, W> {
     fn nextc(&mut self) -> u8 {
         let r = self.rng(LOOKUP_SCALE);
         for i in (r as usize..LOOKUP_SIZE) {
-            if self.lookup[i].p >= r { 
+            if self.lookup[i].p >= r {
                 return self.lookup[i].c;
             }
         }
@@ -179,9 +180,9 @@ fn main() {
     } else {
         1000
     };
-    
+
     let stdout = io::stdout();
-    let mut out = stdout.lock();
+    let mut out = BufWriter::new(stdout.lock());
 
     out.write_all(b">ONE Homo sapiens alu\n").unwrap();
     {
