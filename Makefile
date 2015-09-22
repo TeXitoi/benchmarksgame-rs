@@ -2,8 +2,11 @@ SOURCES = $(wildcard src/*.rs)
 RUSTC ?= rustc
 RUSTC_FLAGS ?= -C opt-level=3 -C target-cpu=core2 -C lto
 RUSTC_FLAGS += -L ./lib
-REGEX ?= regex-0.1.30
+REGEX ?= regex-0.1.41
 ARENA ?= typed-arena-1.0.1
+
+version=$(lastword $(subst -,  , $1))
+crate=$(strip $(subst -$(call version, $1),, $1))
 
 .PHONY: all distclean clean
 .SECONDARY:
@@ -20,17 +23,18 @@ diff/chameneos_redux.diff: out/chameneos_redux.txt ref/chameneos_redux.txt
 	mkdir -p diff
 	sed -r 's/^[0-9]+/42/' $< | diff -u ref/chameneos_redux.txt - > $@
 
-bin/regex_dna: src/regex_dna.rs lib/$(REGEX).pkg
-
 bin/binary_trees: src/binary_trees.rs lib/$(ARENA).pkg
+
+bin/regex_dna: src/regex_dna.rs lib/$(REGEX).pkg
 
 lib/%.pkg:
 	mkdir -p tmp
-	curl -s -L https://crates.io/api/v1/crates/`echo '$*' | sed -r 's#-([^-]*$$)#/\1#'`/download > tmp/$*.crate
-	tar -C tmp/ -xzf tmp/$*.crate
-	cargo build --release --manifest-path tmp/$*/Cargo.toml
+	rm -rf tmp/$(call crate,$*)-deps
+	cargo new tmp/$(call crate,$*)-deps
+	echo '\n[dependencies]\n$(call crate,$*) = "$(call version,$*)"' >> tmp/$(call crate,$*)-deps/Cargo.toml
+	cargo build --release --manifest-path tmp/$(call crate,$*)-deps/Cargo.toml
 	mkdir -p lib
-	cp tmp/$*/target/release/*.rlib lib/
+	cp tmp/$(call crate,$*)-deps/target/release/deps/* lib/
 	@touch lib/$*.pkg
 
 bin/%: src/%.rs
