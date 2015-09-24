@@ -101,5 +101,7 @@ fn run<W: io::Write>(writer: &mut W) -> io::Result<()> {
 }
 
 fn main() {
-    run(&mut io::stdout()).unwrap()
+    let out = io::stdout();
+    let mut outlocked = io::BufWriter::new(out.lock());
+    run(&mut outlocked).unwrap()
 }
