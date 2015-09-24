@@ -33,16 +33,14 @@ bin/fasta_redux: src/fasta_redux.rs lib/$(NUM_CPU).pkg
 bin/regex_dna: src/regex_dna.rs lib/$(REGEX).pkg
 
 lib/%.pkg:
-	@mkdir -p tmp
-	@rm -rf tmp/$(call crate,$*)-deps
-	@cargo new tmp/$(call crate,$*)-deps
-	@echo >> tmp/$(call crate,$*)-deps/Cargo.toml
-	@echo '[dependencies]' >> tmp/$(call crate,$*)-deps/Cargo.toml
-	@echo '$(call crate,$*) = "$(call version,$*)"' >> tmp/$(call crate,$*)-deps/Cargo.toml
-	@cargo build --release --manifest-path tmp/$(call crate,$*)-deps/Cargo.toml
-	@mkdir -p lib
-	@cp tmp/$(call crate,$*)-deps/target/release/deps/* lib/
-	@touch lib/$*.pkg
+	mkdir -p tmp
+	rm -rf tmp/$(call crate,$*)-deps
+	cargo new tmp/$(call crate,$*)-deps
+	printf '\n[dependencies]\n$(call crate,$*) = "$(call version,$*)"\n' >> tmp/$(call crate,$*)-deps/Cargo.toml
+	cargo build --release --manifest-path tmp/$(call crate,$*)-deps/Cargo.toml
+	mkdir -p lib
+	cp tmp/$(call crate,$*)-deps/target/release/deps/* lib/
+	touch lib/$*.pkg
 
 bin/%: src/%.rs
 	mkdir -p bin
