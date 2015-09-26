@@ -93,7 +93,7 @@ fn mult<F>(v: &[f64], out: &mut [f64], start: usize, a: F)
         let mut sum = f64x2(0.0, 0.0);
         for (j, chunk) in v.chunks(2).enumerate().map(|(j, s)| (2 * j, s)) {
             let top = f64x2(chunk[0], chunk[1]);
-            let bot = a(usizex2(i, i), usizex2(j, j+1)); //f64x2(a(i, j), a(i, j + 1));
+            let bot = a(usizex2(i, i), usizex2(j, j+1));
             sum = sum + top / bot;
         }
         let f64x2(a, b) = sum;
