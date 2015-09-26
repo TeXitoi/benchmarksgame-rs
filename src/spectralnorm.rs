@@ -9,8 +9,35 @@
 use std::iter::repeat;
 use std::thread;
 
-// As std::simd::f64x2 is unstable, we provide a similar interface,
+// As std::simd::f64x2 etc. are unstable, we provide a similar interface,
 // expecting llvm to autovectorize its usage.
+#[allow(non_camel_case_types)]
+#[derive(Copy, Clone)]
+struct usizex2(usize, usize);
+impl std::ops::Add for usizex2 {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self {
+        usizex2(self.0 + rhs.0, self.1 + rhs.1)
+    }
+}
+impl std::ops::Mul for usizex2 {
+    type Output = Self;
+    fn mul(self, rhs: Self) -> Self {
+        usizex2(self.0 * rhs.0, self.1 * rhs.1)
+    }
+}
+impl std::ops::Div for usizex2 {
+    type Output = Self;
+    fn div(self, rhs: Self) -> Self {
+        usizex2(self.0 / rhs.0, self.1 / rhs.1)
+    }
+}
+impl From<usizex2> for f64x2 {
+    fn from(i: usizex2) -> f64x2 {
+        f64x2(i.0 as f64, i.1 as f64)
+    }
+}
+
 #[allow(non_camel_case_types)]
 struct f64x2(f64, f64);
 impl std::ops::Add for f64x2 {
@@ -53,20 +80,20 @@ fn mult_AtAv(v: &[f64], out: &mut [f64], tmp: &mut [f64]) {
 }
 
 fn mult_Av(v: &[f64], out: &mut [f64]) {
-    parallel(out, |start, out| mult(v, out, start, |i, j| A(i, j)));
+    parallel(out, |start, out| mult(v, out, start, Ax2));
 }
 
 fn mult_Atv(v: &[f64], out: &mut [f64]) {
-    parallel(out, |start, out| mult(v, out, start, |i, j| A(j, i)));
+    parallel(out, |start, out| mult(v, out, start, |i, j| Ax2(j, i)));
 }
 
 fn mult<F>(v: &[f64], out: &mut [f64], start: usize, a: F)
-           where F: Fn(usize, usize) -> f64 {
+           where F: Fn(usizex2, usizex2) -> f64x2 {
     for (i, slot) in out.iter_mut().enumerate().map(|(i, s)| (i + start, s)) {
         let mut sum = f64x2(0.0, 0.0);
         for (j, chunk) in v.chunks(2).enumerate().map(|(j, s)| (2 * j, s)) {
             let top = f64x2(chunk[0], chunk[1]);
-            let bot = f64x2(a(i, j), a(i, j + 1));
+            let bot = a(usizex2(i, i), usizex2(j, j+1)); //f64x2(a(i, j), a(i, j + 1));
             sum = sum + top / bot;
         }
         let f64x2(a, b) = sum;
@@ -74,8 +101,8 @@ fn mult<F>(v: &[f64], out: &mut [f64], start: usize, a: F)
     }
 }
 
-fn A(i: usize, j: usize) -> f64 {
-    ((i + j) * (i + j + 1) / 2 + i + 1) as f64
+fn Ax2(i: usizex2, j: usizex2) -> f64x2 {
+    ((i + j) * (i + j + usizex2(1, 1)) / usizex2(2, 2) + i + usizex2(1, 1)).into()
 }
 
 fn dot(v: &[f64], u: &[f64]) -> f64 {
