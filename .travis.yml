@@ -3,9 +3,10 @@ rust:
   - beta
   - stable
   - nightly
-before_script:
-  - sudo apt-get update -q
-  - sudo apt-get install libgmp-dev
+addons:
+  apt:
+    packages:
+      - libgmp-dev
 script:
   - make all
 sudo: false
