@@ -2,205 +2,401 @@
 // http://benchmarksgame.alioth.debian.org/
 //
 // contributed by the Rust Project Developers
-// contributed by TeXitoi
+// contributed by Joshua Landau
 
-use self::Color::{Red, Yellow, Blue};
-use std::sync::mpsc::{channel, Sender, Receiver};
-use std::fmt;
-use std::thread::spawn;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread;
 
-fn print_complements() {
-    let all = [Blue, Red, Yellow];
-    for aa in all.iter() {
-        for bb in all.iter() {
-            println!("{} + {} -> {}", *aa, *bb, transform(*aa, *bb));
-        }
-    }
-}
 
-#[derive(Clone, Copy)]
-enum Color {
-    Red,
-    Yellow,
-    Blue,
-}
+const DIGITS: [&'static str; 10] = [
+    "zero", "one", "two", "three", "four",
+    "five", "six", "seven", "eight", "nine",
+];
 
-impl fmt::Display for Color {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let str = match *self {
-            Red => "red",
-            Yellow => "yellow",
-            Blue => "blue",
-        };
-        write!(f, "{}", str)
-    }
-}
-
-#[derive(Clone, Copy)]
-struct CreatureInfo {
-    name: usize,
-    color: Color
-}
-
-fn show_color_list(set: Vec<Color>) -> String {
+fn wordy_num(num: usize) -> String {
     let mut out = String::new();
-    for col in set.iter() {
-        out.push(' ');
-        out.push_str(&*format!("{}", col));
+    for char in num.to_string().chars() {
+        out.push_str(" ");
+        out.push_str(DIGITS[char.to_digit(10).unwrap() as usize]);
     }
     out
 }
 
-fn show_digit(nn: usize) -> &'static str {
-    match nn {
-        0 => {" zero"}
-        1 => {" one"}
-        2 => {" two"}
-        3 => {" three"}
-        4 => {" four"}
-        5 => {" five"}
-        6 => {" six"}
-        7 => {" seven"}
-        8 => {" eight"}
-        9 => {" nine"}
-        _ => {panic!("expected digits from 0 to 9...")}
-    }
+
+#[derive(Clone, Copy)]
+#[repr(u8)]
+enum Color {
+    Red = 0,
+    Yellow = 1,
+    Blue = 2,
 }
 
-struct Number(usize);
-impl fmt::Display for Number {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut out = vec![];
-        let Number(mut num) = *self;
-        if num == 0 { out.push(show_digit(0)) };
-
-        while num != 0 {
-            let dig = num % 10;
-            num = num / 10;
-            let s = show_digit(dig);
-            out.push(s);
+impl Color {
+    fn show(&self) -> &'static str {
+        use Color::*;
+        match *self {
+            Red => "red",
+            Yellow => "yellow",
+            Blue => "blue",
         }
+    }
+}
 
-        for s in out.iter().rev() {
-            try!(write!(f, "{}", s))
+fn complement_color(left: Color, right: Color) -> Color {
+    use Color::*;
+    match (left, right) {
+        (Red,    Red   ) => Red,
+        (Red,    Yellow) => Blue,
+        (Red,    Blue  ) => Yellow,
+        (Yellow, Red   ) => Blue,
+        (Yellow, Yellow) => Yellow,
+        (Yellow, Blue  ) => Red,
+        (Blue,   Red   ) => Yellow,
+        (Blue,   Yellow) => Red,
+        (Blue,   Blue  ) => Blue,
+    }
+}
+
+
+#[derive(Default)]
+struct AtomicColor(AtomicUsize);
+
+impl AtomicColor {
+    fn load(&self, order: Ordering) -> Color {
+        use Color::*;
+        match self.0.load(order) % 3 {
+            0 => Red,
+            1 => Yellow,
+            _ => Blue,
         }
-        Ok(())
+    }
+
+    fn store(&self, color: Color, order: Ordering) {
+        self.0.store(color as usize, order)
     }
 }
 
-fn transform(aa: Color, bb: Color) -> Color {
-    match (aa, bb) {
-        (Red,    Red   ) => { Red    }
-        (Red,    Yellow) => { Blue   }
-        (Red,    Blue  ) => { Yellow }
-        (Yellow, Red   ) => { Blue   }
-        (Yellow, Yellow) => { Yellow }
-        (Yellow, Blue  ) => { Red    }
-        (Blue,   Red   ) => { Yellow }
-        (Blue,   Yellow) => { Red    }
-        (Blue,   Blue  ) => { Blue   }
+
+// Each Chameneos is atomic to allow safe, fast
+// parallel thread access. Unfortunately this
+// this is a bit wordy, but it works out OK.
+#[derive(Default)]
+struct ChameneosState {
+    name: u8,
+    color: AtomicColor,
+    meet_count: AtomicUsize,
+    meet_same_count: AtomicUsize,
+}
+
+impl ChameneosState {
+    fn name(&self) -> u8 {
+        self.name
+    }
+
+    fn color(&self) -> Color {
+        self.color.load(Ordering::Acquire)
+    }
+
+    fn meet(&self, same: bool, color: Color) {
+        let new = self.meet_count.load(Ordering::Acquire) + 1;
+        self.meet_count.store(new, Ordering::Release);
+        if same {
+            let new = self.meet_same_count.load(Ordering::Acquire) + 1;
+            self.meet_same_count.store(new, Ordering::Release);
+        }
+        self.color.store(color, Ordering::Release);
     }
 }
 
-fn creature(
-    name: usize,
-    mut color: Color,
-    from_rendezvous: Receiver<CreatureInfo>,
-    to_rendezvous: Sender<CreatureInfo>,
-    to_rendezvous_log: Sender<String>
-) {
-    let mut creatures_met = 0i32;
-    let mut evil_clones_met = 0;
-    let mut rendezvous = from_rendezvous.iter();
+
+#[derive(Copy, Clone)]
+struct Chameneos {
+    idx: u32
+}
+
+impl Chameneos {
+    fn is_valid(&self) -> bool {
+        self.idx != 0
+    }
+
+    fn get<'st>(&self, shared: &'st Shared) -> &'st ChameneosState {
+        &shared.states[(self.idx & BLOCK) as usize]
+    }
+}
+
+
+struct Shared {
+    // We can only store min(15, 8 + num_threads)
+    // anyway, so no need for a large buffer.
+    // The 15 is from naming constraints (4 bits, nonzero).
+    // The 8 + num_threads because of queue constraints.
+    // Using 16 avoids bounds checks.
+    states: [ChameneosState; 16],
+    // Bottom block is mall, rest are queue slots
+    atomic_queue: AtomicUsize,
+    meetings_had: AtomicUsize,
+    meetings_limit: usize,
+}
+
+impl Shared {
+    fn null_task(&self) -> Chameneos {
+        self.task_at(0)
+    }
+
+    fn task_at(&self, idx: u32) -> Chameneos {
+        Chameneos { idx: idx }
+    }
+
+    fn load(&self, order: Ordering) -> u32 {
+        self.atomic_queue.load(order) as u32
+    }
+
+    fn store(&self, val: u32, order: Ordering) {
+        self.atomic_queue.store(val as usize, order)
+    }
+
+    fn compare_and_swap(&self, current: u32, new: u32, order: Ordering) -> u32 {
+        self.atomic_queue.compare_and_swap(current as usize, new as usize, order) as u32
+    }
+}
+
+
+const BLOCK: u32 = 0b1111;
+const BLOCK_LEN: u32 = 4;
+const QUEUE_LEN: u32 = 32 / BLOCK_LEN;
+const QUEUE_STOPPED: u32 = !0;
+
+struct State {
+    cache: u32,
+}
+
+impl State {
+    fn new(shared: &Shared) -> State {
+        State { cache: shared.load(Ordering::SeqCst) }
+    }
+
+    fn run(&mut self, shared: &Shared) -> Option<(TransactionalQueue, Chameneos)> {
+        let cache = &mut self.cache;
+
+        if *cache == QUEUE_STOPPED {
+            None
+        }
+        else {
+            let mut queue = TransactionalQueue {
+                set_state: *cache,
+                cache: cache
+            };
+            let mall = queue.take(shared);
+            Some((queue, mall))
+        }
+    }
+
+    fn register_meeting(&self, shared: &Shared) -> bool {
+        let meetings_had = shared.meetings_had.fetch_add(1, Ordering::Acquire);
+        if meetings_had < shared.meetings_limit {
+            return true;
+        }
+        // Oops, we couldn't actually do that
+        shared.store(QUEUE_STOPPED, Ordering::SeqCst);
+        shared.meetings_had.fetch_sub(1, Ordering::SeqCst);
+        false
+    }
+}
+
+
+struct TransactionalQueue<'a> {
+    set_state: u32,
+    cache: &'a mut u32,
+}
+
+impl<'a> TransactionalQueue<'a> {
+    fn submit(mut self, shared: &Shared, mall: Chameneos) -> bool {
+        self.set_state <<= BLOCK_LEN;
+        self.set_state |= mall.idx;
+
+        let actual = shared.compare_and_swap(
+            *self.cache,     // expected current value
+            self.set_state,  // wanted value
+            Ordering::Release
+        );
+
+        let worked = actual == *self.cache;
+        *self.cache = if worked { self.set_state } else { actual };
+        worked
+    }
+
+    fn cancel(&mut self, shared: &Shared) {
+        *self.cache = shared.load(Ordering::Relaxed);
+    }
+
+    fn take(&mut self, shared: &Shared) -> Chameneos {
+        let ret = self.set_state & BLOCK;
+        self.set_state >>= BLOCK_LEN;
+        shared.task_at(ret)
+    }
+
+    fn put(&mut self, first: Chameneos, second: Chameneos) {
+        let zeros = self.set_state.leading_zeros();
+        let shift = (QUEUE_LEN - (zeros / BLOCK_LEN)) * BLOCK_LEN;
+        self.set_state |= ((first.idx << BLOCK_LEN) | second.idx) << shift;
+    }
+}
+
+
+// Runs threads from the shared thread pool.
+// Uses optimistic concurrency to queue and
+// deque threads, as well as to take from the
+// mall.
+fn thread_executor(mut task: Chameneos, shared: &Shared) {
+    let mut state = State::new(shared);
 
     loop {
-        // ask for a pairing
-        to_rendezvous.send(CreatureInfo {name: name, color: color}).unwrap();
+        let mut actor = task;
+        let mut mall;
 
-        // log and change, or quit
-        match rendezvous.next() {
-            Some(other_creature) => {
-                color = transform(color, other_creature.color);
+        {
+            let (mut queue, new_mall) = match state.run(shared) {
+                Some(x) => x,
+                None => return,
+            };
 
-                // track some statistics
-                creatures_met += 1;
-                if other_creature.name == name {
-                   evil_clones_met += 1;
-                }
+            if !actor.is_valid() {
+                actor = queue.take(shared);
             }
-            None => break
+
+            if !actor.is_valid() {
+                std::thread::sleep_ms(1);
+                queue.cancel(shared);
+                continue;
+            }
+
+            mall = new_mall;
+            if !mall.is_valid() {
+                let new_task = queue.take(shared);
+                if queue.submit(shared, actor) {
+                    task = new_task;
+                }
+                continue;
+            }
+            else if !queue.submit(shared, shared.null_task()) {
+                continue;
+            }
+        }
+
+        if !state.register_meeting(shared) { return; }
+
+        let actor_ref = actor.get(shared);
+        let mall_ref = mall.get(shared);
+
+        let same = actor_ref.name() == mall_ref.name();
+        let new_color = complement_color(actor_ref.color(), mall_ref.color());
+
+        actor_ref.meet(same, new_color);
+        mall_ref.meet(same, new_color);
+
+        loop {
+            let (mut queue, new_mall) = match state.run(shared) {
+                Some(x) => x,
+                None => return,
+            };
+
+            queue.put(actor, mall);
+            let new_task = queue.take(shared);
+            if queue.submit(shared, new_mall) {
+                task = new_task;
+                break;
+            }
         }
     }
-    // log creatures met and evil clones of self
-    let report = format!("{}{}", creatures_met, Number(evil_clones_met));
-    to_rendezvous_log.send(report).unwrap();
 }
 
-fn rendezvous(nn: usize, set: Vec<Color>) {
-    // these ports will allow us to hear from the creatures
-    let (to_rendezvous, from_creatures) = channel::<CreatureInfo>();
 
-    // these channels will be passed to the creatures so they can talk to us
-    let (to_rendezvous_log, from_creatures_log) = channel::<String>();
+fn run_for(meetings_limit: usize, colors: &[Color]) -> Vec<(usize, usize)> {
+    let num_threads = colors.len();
 
-    // these channels will allow us to talk to each creature by 'name'/index
-    let to_creature: Vec<Sender<CreatureInfo>> =
-        set.iter().enumerate().map(|(ii, &col)| {
-            // create each creature as a listener with a port, and
-            // give us a channel to talk to each
-            let to_rendezvous = to_rendezvous.clone();
-            let to_rendezvous_log = to_rendezvous_log.clone();
-            let (to_creature, from_rendezvous) = channel();
-            spawn(move|| {
-                creature(ii,
-                         col,
-                         from_rendezvous,
-                         to_rendezvous,
-                         to_rendezvous_log);
-            });
-            to_creature
-        }).collect();
+    let x = || Default::default();
+    let mut states: [ChameneosState; 16] = [
+        x(), x(), x(), x(), x(), x(), x(), x(),
+        x(), x(), x(), x(), x(), x(), x(), x(),
+    ];
 
-    let mut creatures_met = 0;
+    let mut enqueued = 0;
+    for (i, &color) in colors.iter().enumerate() {
+        let idx = i + 1;
+        let chameneos_state = &mut states[idx];
+        chameneos_state.name = idx as u8;
+        chameneos_state.color.store(color, Ordering::Release);
 
-    // set up meetings...
-    for _ in (0..nn) {
-        let fst_creature = from_creatures.recv().unwrap();
-        let snd_creature = from_creatures.recv().unwrap();
-
-        creatures_met += 2;
-
-        to_creature[fst_creature.name].send(snd_creature).unwrap();
-        to_creature[snd_creature.name].send(fst_creature).unwrap();
+        if idx > num_threads {
+            enqueued |= idx;
+            enqueued <<= BLOCK_LEN;
+        }
     }
 
-    // tell each creature to stop
-    drop(to_creature);
+    let shared = Arc::new(Shared {
+        atomic_queue: AtomicUsize::new(enqueued),
+        meetings_had: AtomicUsize::new(0),
+        meetings_limit: meetings_limit,
+        states: states,
+    });
 
-    // print each color in the set
-    println!("{}", show_color_list(set));
+    let threads: Vec<_> = (0..num_threads).map(|i| {
+        let task = shared.task_at((i + 1) as u32);
+        let shared = shared.clone();
+        thread::spawn(move || thread_executor(task, &shared))
+    }).collect();
 
-    // print each creature's stats
-    drop(to_rendezvous_log);
-    for rep in from_creatures_log.iter() {
-        println!("{}", rep);
+    for thread in threads {
+        thread.join().unwrap();
     }
 
-    // print the total number of creatures met
-    println!("{}\n", Number(creatures_met));
+    let output = &shared.states[..];
+
+    output[1..colors.len() + 1].iter().map(|ch| (
+        ch.meet_count.load(Ordering::SeqCst),
+        ch.meet_same_count.load(Ordering::SeqCst),
+    )).collect()
 }
+
 
 fn main() {
-    let nn = std::env::args_os().nth(1)
+    use Color::*;
+    let small = [Blue, Red, Yellow];
+    let large = [Blue, Red, Yellow, Red, Yellow, Blue, Red, Yellow, Red, Blue];
+
+    let num_meetings = std::env::args_os().nth(1)
         .and_then(|s| s.into_string().ok())
         .and_then(|n| n.parse().ok())
         .unwrap_or(600);
 
-    print_complements();
+    let colors = [Blue, Red, Yellow];
+    for &left in &colors {
+        for &right in &colors {
+            let complement = complement_color(left, right);
+            println!("{} + {} -> {}", left.show(), right.show(), complement.show());
+        }
+    }
+
+    let threads: Vec<(&[_], _)> = vec![
+        (&small, thread::spawn(move || run_for(num_meetings, &small))),
+        (&large, thread::spawn(move || run_for(num_meetings, &large))),
+    ];
+
+    for (colors, thread) in threads {
+        println!("");
+
+        for color in colors { print!(" {}", color.show()); }
+        println!("");
+
+        let mut total_count = 0;
+        for (meet_count, meet_same_count) in thread.join().unwrap() {
+            println!("{}{}", meet_count, wordy_num(meet_same_count));
+            total_count += meet_count;
+        }
+
+        println!("{}", wordy_num(total_count));
+    }
+
     println!("");
-
-    rendezvous(nn, vec!(Blue, Red, Yellow));
-
-    rendezvous(nn,
-        vec!(Blue, Red, Yellow, Red, Yellow, Blue, Red, Yellow, Red, Blue));
 }
