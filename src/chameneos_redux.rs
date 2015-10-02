@@ -45,16 +45,16 @@ impl Color {
 
 fn complement_color(left: Color, right: Color) -> Color {
     use Color::*;
-    match (left, right) {
-        (Red,    Red   ) => Red,
-        (Red,    Yellow) => Blue,
-        (Red,    Blue  ) => Yellow,
-        (Yellow, Red   ) => Blue,
-        (Yellow, Yellow) => Yellow,
-        (Yellow, Blue  ) => Red,
-        (Blue,   Red   ) => Yellow,
-        (Blue,   Yellow) => Red,
-        (Blue,   Blue  ) => Blue,
+    match ((left as u8) << 2) | (right as u8) {
+        0b_00_00 => Red,
+        0b_00_01 => Blue,
+        0b_00_10 => Yellow,
+        0b_01_00 => Blue,
+        0b_01_01 => Yellow,
+        0b_01_10 => Red,
+        0b_10_00 => Yellow,
+        0b_10_01 => Red,
+        _        => Blue,
     }
 }
 
@@ -65,7 +65,7 @@ struct AtomicColor(AtomicUsize);
 impl AtomicColor {
     fn load(&self, order: Ordering) -> Color {
         use Color::*;
-        match self.0.load(order) % 3 {
+        match self.0.load(order) {
             0 => Red,
             1 => Yellow,
             _ => Blue,
@@ -127,10 +127,9 @@ impl Chameneos {
 
 
 struct Shared {
-    // We can only store min(15, 8 + num_threads)
-    // anyway, so no need for a large buffer.
-    // The 15 is from naming constraints (4 bits, nonzero).
-    // The 8 + num_threads because of queue constraints.
+    // We can only store 12 due to overflow
+    // when the maximum number of pairs are
+    // created, so no need for a large buffer.
     // Using 16 avoids bounds checks.
     states: [ChameneosState; 16],
     // Bottom block is mall, rest are queue slots
@@ -176,7 +175,7 @@ impl State {
         State { cache: shared.load(Ordering::SeqCst) }
     }
 
-    fn run(&mut self, shared: &Shared) -> Option<(TransactionalQueue, Chameneos)> {
+    fn run(&mut self, shared: &Shared) -> Option<(TransactionalQueue, Chameneos, u8)> {
         let cache = &mut self.cache;
 
         if *cache == QUEUE_STOPPED {
@@ -187,19 +186,21 @@ impl State {
                 set_state: *cache,
                 cache: cache
             };
+            let count = queue.take_count();
             let mall = queue.take(shared);
-            Some((queue, mall))
+            Some((queue, mall, count))
         }
     }
 
-    fn register_meeting(&self, shared: &Shared) -> bool {
+    fn register_meeting(&mut self, shared: &Shared, count: u8) -> bool {
+        if count != 0 { return true; }
+
         let meetings_had = shared.meetings_had.fetch_add(1, Ordering::Acquire);
         if meetings_had < shared.meetings_limit {
             return true;
         }
         // Oops, we couldn't actually do that
         shared.store(QUEUE_STOPPED, Ordering::SeqCst);
-        shared.meetings_had.fetch_sub(1, Ordering::SeqCst);
         false
     }
 }
@@ -211,9 +212,12 @@ struct TransactionalQueue<'a> {
 }
 
 impl<'a> TransactionalQueue<'a> {
-    fn submit(mut self, shared: &Shared, mall: Chameneos) -> bool {
+    fn submit(mut self, shared: &Shared, mall: Chameneos, count: u8) -> bool {
         self.set_state <<= BLOCK_LEN;
         self.set_state |= mall.idx;
+
+        self.set_state <<= 8;
+        self.set_state |= count as u32;
 
         let actual = shared.compare_and_swap(
             *self.cache,     // expected current value
@@ -228,6 +232,12 @@ impl<'a> TransactionalQueue<'a> {
 
     fn cancel(&mut self, shared: &Shared) {
         *self.cache = shared.load(Ordering::Relaxed);
+    }
+
+    fn take_count(&mut self) -> u8 {
+        let ret = (self.set_state & 0b11111111) as u8;
+        self.set_state >>= 8;
+        ret
     }
 
     fn take(&mut self, shared: &Shared) -> Chameneos {
@@ -250,43 +260,52 @@ impl<'a> TransactionalQueue<'a> {
 // mall.
 fn thread_executor(mut task: Chameneos, shared: &Shared) {
     let mut state = State::new(shared);
+    let mut mall = shared.null_task();
 
     loop {
-        let mut actor = task;
-        let mut mall;
+        let mut task_tmp = task;
+        let mut mall_tmp = mall;
+        let mut count;
 
         {
-            let (mut queue, new_mall) = match state.run(shared) {
+            let (mut queue, new_mall, new_count) = match state.run(shared) {
                 Some(x) => x,
                 None => return,
             };
+            count = new_count;
 
-            if !actor.is_valid() {
-                actor = queue.take(shared);
+            if mall_tmp.is_valid() {
+                queue.put(task_tmp, mall_tmp);
+                task_tmp = queue.take(shared);
+            }
+            else if !task_tmp.is_valid() {
+                task_tmp = queue.take(shared);
+                if !task_tmp.is_valid() {
+                    std::thread::sleep_ms(1);
+                    queue.cancel(shared);
+                    continue;
+                }
             }
 
-            if !actor.is_valid() {
-                std::thread::sleep_ms(1);
-                queue.cancel(shared);
-                continue;
-            }
-
-            mall = new_mall;
-            if !mall.is_valid() {
-                let new_task = queue.take(shared);
-                if queue.submit(shared, actor) {
-                    task = new_task;
+            mall_tmp = new_mall;
+            if !mall_tmp.is_valid() {
+                let replacement_task = queue.take(shared);
+                if queue.submit(shared, task_tmp, count) {
+                    task = replacement_task;
+                    mall = shared.null_task();
                 }
                 continue;
             }
-            else if !queue.submit(shared, shared.null_task()) {
+
+            count = count.wrapping_sub(1);
+            if !queue.submit(shared, shared.null_task(), count) {
                 continue;
             }
+            task = task_tmp;
+            mall = mall_tmp;
         }
 
-        if !state.register_meeting(shared) { return; }
-
-        let actor_ref = actor.get(shared);
+        let actor_ref = task_tmp.get(shared);
         let mall_ref = mall.get(shared);
 
         let same = actor_ref.name() == mall_ref.name();
@@ -295,24 +314,13 @@ fn thread_executor(mut task: Chameneos, shared: &Shared) {
         actor_ref.meet(same, new_color);
         mall_ref.meet(same, new_color);
 
-        loop {
-            let (mut queue, new_mall) = match state.run(shared) {
-                Some(x) => x,
-                None => return,
-            };
-
-            queue.put(actor, mall);
-            let new_task = queue.take(shared);
-            if queue.submit(shared, new_mall) {
-                task = new_task;
-                break;
-            }
-        }
+        if !state.register_meeting(shared, count) { return; }
     }
 }
 
 
 fn run_for(meetings_limit: usize, colors: &[Color]) -> Vec<(usize, usize)> {
+    assert!(meetings_limit != 0);
     let num_threads = colors.len();
 
     let x = || Default::default();
@@ -321,23 +329,17 @@ fn run_for(meetings_limit: usize, colors: &[Color]) -> Vec<(usize, usize)> {
         x(), x(), x(), x(), x(), x(), x(), x(),
     ];
 
-    let mut enqueued = 0;
     for (i, &color) in colors.iter().enumerate() {
         let idx = i + 1;
         let chameneos_state = &mut states[idx];
         chameneos_state.name = idx as u8;
         chameneos_state.color.store(color, Ordering::Release);
-
-        if idx > num_threads {
-            enqueued |= idx;
-            enqueued <<= BLOCK_LEN;
-        }
     }
 
     let shared = Arc::new(Shared {
-        atomic_queue: AtomicUsize::new(enqueued),
+        atomic_queue: AtomicUsize::new(meetings_limit as u8 as usize),
         meetings_had: AtomicUsize::new(0),
-        meetings_limit: meetings_limit,
+        meetings_limit: ((meetings_limit - 1) >> 8),
         states: states,
     });
 
