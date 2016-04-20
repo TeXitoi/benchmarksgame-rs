@@ -36,7 +36,7 @@ lib/%.pkg:
 	mkdir -p tmp
 	rm -rf tmp/$(call crate,$*)-deps
 	cargo new tmp/$(call crate,$*)-deps
-	printf '\n[dependencies]\n$(call crate,$*) = "$(call version,$*)"\n' >> tmp/$(call crate,$*)-deps/Cargo.toml
+	printf '$(call crate,$*) = "$(call version,$*)"\n' >> tmp/$(call crate,$*)-deps/Cargo.toml
 	cargo build --release --manifest-path tmp/$(call crate,$*)-deps/Cargo.toml
 	mkdir -p lib
 	cp tmp/$(call crate,$*)-deps/target/release/deps/* lib/
