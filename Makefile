@@ -2,9 +2,9 @@ SOURCES = $(wildcard src/*.rs)
 RUSTC ?= rustc
 RUSTC_FLAGS ?= -C opt-level=3 -C target-cpu=core2 -C lto
 RUSTC_FLAGS += -L ./lib
-REGEX ?= regex-0.1.41
-ARENA ?= typed-arena-1.0.1
-NUM_CPU ?= num_cpus-0.2.6
+REGEX ?= regex-0.1.66
+ARENA ?= typed-arena-1.1.0
+NUM_CPU ?= num_cpus-0.2.11
 
 version=$(lastword $(subst -,  , $1))
 crate=$(strip $(subst -$(call version, $1),, $1))
