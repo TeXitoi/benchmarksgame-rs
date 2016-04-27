@@ -7,33 +7,35 @@
 
 extern crate regex;
 
+use regex::bytes::Regex;
+
 use std::io::{self, Read};
 use std::sync::Arc;
 use std::thread;
 
-macro_rules! regex { ($re:expr) => { ::regex::Regex::new($re).unwrap() } }
+macro_rules! regex { ($re:expr) => { Regex::new($re).unwrap() } }
 
 fn main() {
-    let mut seq = String::with_capacity(50 * (1 << 20));
-    io::stdin().read_to_string(&mut seq).unwrap();
+    let mut seq = Vec::with_capacity(50 * (1 << 20));
+    io::stdin().read_to_end(&mut seq).unwrap();
     let ilen = seq.len();
 
-    seq = regex!(">[^\n]*\n|\n").replace_all(&seq, "");
+    seq = regex!(r">[^\n]*\n|\n").replace_all(&seq, &b""[..]);
     let clen = seq.len();
     let seq_arc = Arc::new(seq.clone());
 
     let variants = vec![
-        regex!("agggtaaa|tttaccct"),
-        regex!("[cgt]gggtaaa|tttaccc[acg]"),
-        regex!("a[act]ggtaaa|tttacc[agt]t"),
-        regex!("ag[act]gtaaa|tttac[agt]ct"),
-        regex!("agg[act]taaa|ttta[agt]cct"),
-        regex!("aggg[acg]aaa|ttt[cgt]ccct"),
-        regex!("agggt[cgt]aa|tt[acg]accct"),
-        regex!("agggta[cgt]a|t[acg]taccct"),
-        regex!("agggtaa[cgt]|[acg]ttaccct"),
+        regex!(r"agggtaaa|tttaccct"),
+        regex!(r"[cgt]gggtaaa|tttaccc[acg]"),
+        regex!(r"a[act]ggtaaa|tttacc[agt]t"),
+        regex!(r"ag[act]gtaaa|tttac[agt]ct"),
+        regex!(r"agg[act]taaa|ttta[agt]cct"),
+        regex!(r"aggg[acg]aaa|ttt[cgt]ccct"),
+        regex!(r"agggt[cgt]aa|tt[acg]accct"),
+        regex!(r"agggta[cgt]a|t[acg]taccct"),
+        regex!(r"agggtaa[cgt]|[acg]ttaccct"),
     ];
-    let mut counts = vec![];
+    let mut counts = Vec::with_capacity(9);
     for variant in variants {
         let seq = seq_arc.clone();
         let restr = variant.to_string();
@@ -42,17 +44,17 @@ fn main() {
     }
 
     let substs = vec![
-        (regex!("B"), "(c|g|t)"),
-        (regex!("D"), "(a|g|t)"),
-        (regex!("H"), "(a|c|t)"),
-        (regex!("K"), "(g|t)"),
-        (regex!("M"), "(a|c)"),
-        (regex!("N"), "(a|c|g|t)"),
-        (regex!("R"), "(a|g)"),
-        (regex!("S"), "(c|g)"),
-        (regex!("V"), "(a|c|g)"),
-        (regex!("W"), "(a|t)"),
-        (regex!("Y"), "(c|t)"),
+        (regex!(r"B"), &b"(c|g|t)"[..]),
+        (regex!(r"D"), &b"(a|g|t)"[..]),
+        (regex!(r"H"), &b"(a|c|t)"[..]),
+        (regex!(r"K"), &b"(g|t)"[..]),
+        (regex!(r"M"), &b"(a|c)"[..]),
+        (regex!(r"N"), &b"(a|c|g|t)"[..]),
+        (regex!(r"R"), &b"(a|g)"[..]),
+        (regex!(r"S"), &b"(c|g)"[..]),
+        (regex!(r"V"), &b"(a|c|g)"[..]),
+        (regex!(r"W"), &b"(a|t)"[..]),
+        (regex!(r"Y"), &b"(c|t)"[..]),
     ];
     let mut seq = seq;
     for (re, replacement) in substs.into_iter() {
