@@ -66,31 +66,32 @@ struct Planet {
 }
 
 fn advance(bodies: &mut [Planet;N_BODIES], dt: f64, steps: i32) {
-    for _ in (0..steps) {
+    for _ in 0..steps {
         let mut b_slice: &mut [_] = bodies;
-        loop {
-            let bi = match shift_mut_ref(&mut b_slice) {
-                Some(bi) => bi,
-                None => break
-            };
-            for bj in b_slice.iter_mut() {
-                let dx = bi.x - bj.x;
-                let dy = bi.y - bj.y;
-                let dz = bi.z - bj.z;
+        while let Some(bi) = shift_mut_ref(&mut b_slice) {
+            let (vx, vy, vz) = b_slice.iter_mut()
+                .fold((bi.vx, bi.vy, bi.vz), |(vx, vy, vz), bj|{
+                    let dx = bi.x - bj.x;
+                    let dy = bi.y - bj.y;
+                    let dz = bi.z - bj.z;
 
-                let d2 = dx * dx + dy * dy + dz * dz;
-                let mag = dt / (d2 * d2.sqrt());
+                    let d2 = dx * dx + dy * dy + dz * dz;
+                    let mag = dt / (d2 * d2.sqrt());
 
-                let massj_mag = bj.mass * mag;
-                bi.vx -= dx * massj_mag;
-                bi.vy -= dy * massj_mag;
-                bi.vz -= dz * massj_mag;
+                    let massi_mag = bi.mass * mag;
+                    bj.vx += dx * massi_mag;
+                    bj.vy += dy * massi_mag;
+                    bj.vz += dz * massi_mag;
 
-                let massi_mag = bi.mass * mag;
-                bj.vx += dx * massi_mag;
-                bj.vy += dy * massi_mag;
-                bj.vz += dz * massi_mag;
-            }
+                    let massj_mag = bj.mass * mag;
+                    (vx - dx * massj_mag,
+                     vy - dy * massj_mag,
+                     vz - dz * massj_mag)
+                });
+            bi.vx = vx;
+            bi.vy = vy;
+            bi.vz = vz;
+
             bi.x += dt * bi.vx;
             bi.y += dt * bi.vy;
             bi.z += dt * bi.vz;
@@ -99,34 +100,26 @@ fn advance(bodies: &mut [Planet;N_BODIES], dt: f64, steps: i32) {
 }
 
 fn energy(bodies: &[Planet;N_BODIES]) -> f64 {
-    let mut e = 0.0;
-    let mut bodies = bodies.iter();
-    loop {
-        let bi = match bodies.next() {
-            Some(bi) => bi,
-            None => break
-        };
-        e += (bi.vx * bi.vx + bi.vy * bi.vy + bi.vz * bi.vz) * bi.mass / 2.0;
-        for bj in bodies.clone() {
+    bodies.iter().enumerate().fold(0.0, |e, (i, bi)| {
+        let ei = (bi.vx * bi.vx + bi.vy * bi.vy + bi.vz * bi.vz) * bi.mass / 2.0;
+        let ei2 = bodies[i + 1..].iter().fold(0.0, |ej, bj| {
             let dx = bi.x - bj.x;
             let dy = bi.y - bj.y;
             let dz = bi.z - bj.z;
             let dist = (dx * dx + dy * dy + dz * dz).sqrt();
-            e -= bi.mass * bj.mass / dist;
-        }
-    }
-    e
+            ej + bi.mass * bj.mass / dist
+        });
+        e + ei - ei2
+    })
 }
 
 fn offset_momentum(bodies: &mut [Planet;N_BODIES]) {
-    let mut px = 0.0;
-    let mut py = 0.0;
-    let mut pz = 0.0;
-    for bi in bodies.iter() {
-        px += bi.vx * bi.mass;
-        py += bi.vy * bi.mass;
-        pz += bi.vz * bi.mass;
-    }
+    let (px, py, pz) = bodies.iter()
+        .fold((0.0, 0.0, 0.0), |(px, py, pz), bi| 
+            (px + bi.vx * bi.mass,
+             py + bi.vy * bi.mass,
+             pz + bi.vz * bi.mass));
+
     let sun = &mut bodies[0];
     sun.vx = - px / SOLAR_MASS;
     sun.vy = - py / SOLAR_MASS;
@@ -151,7 +144,7 @@ fn main() {
 /// Pop a mutable reference off the head of a slice, mutating the slice to no
 /// longer contain the mutable reference.
 fn shift_mut_ref<'a, T>(r: &mut &'a mut [T]) -> Option<&'a mut T> {
-    if r.len() == 0 { return None }
+    if r.is_empty() { return None }
     let tmp = std::mem::replace(r, &mut []);
     let (h, t) = tmp.split_at_mut(1);
     *r = t;
