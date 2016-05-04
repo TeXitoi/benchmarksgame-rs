@@ -35,7 +35,7 @@ fn main() {
         regex!(r"agggta[cgt]a|t[acg]taccct"),
         regex!(r"agggtaa[cgt]|[acg]ttaccct"),
     ];
-    let mut counts = Vec::with_capacity(9);
+    let mut counts = vec![];
     for variant in variants {
         let seq = seq_arc.clone();
         let restr = variant.to_string();
