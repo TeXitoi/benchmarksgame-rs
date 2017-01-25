@@ -4,14 +4,33 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
-use std::slice;
 use std::sync::Arc;
 use std::thread;
+use std::hash::{Hasher, BuildHasherDefault};
+use std::collections::HashMap;
 
-static TABLE: [u8;4] = [ 'A' as u8, 'C' as u8, 'G' as u8, 'T' as u8 ];
-static TABLE_SIZE: usize = 2 << 16;
+struct CustomHasher(u64);
+impl Default for CustomHasher {
+    fn default() -> Self {
+        CustomHasher(0)
+    }
+}
+impl Hasher for CustomHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, _: &[u8]) {
+        unimplemented!()
+    }
+    fn write_u64(&mut self, i: u64) {
+        self.0 = i ^ i >> 7;
+    }
+}
+type CustomBuildHasher = BuildHasherDefault<CustomHasher>;
+type CustomHashMap<K, V> = HashMap<K, V, CustomBuildHasher>;
+type Map = CustomHashMap<Code, u32>;
 
-static OCCURRENCES: [&'static str;5] = [
+static OCCURRENCES: [&'static str; 5] = [
     "GGT",
     "GGTA",
     "GGTATT",
@@ -19,235 +38,105 @@ static OCCURRENCES: [&'static str;5] = [
     "GGTATTTTAATTTATAGT",
 ];
 
-// Code implementation
-
-#[derive(PartialEq, PartialOrd, Ord, Eq, Clone, Copy)]
+#[derive(Hash, PartialEq, PartialOrd, Ord, Eq, Clone, Copy)]
 struct Code(u64);
 
 impl Code {
-    fn hash(&self) -> u64 {
-        let Code(ret) = *self;
-        return ret;
+    fn push(&mut self, c: u8, mask: u64) {
+        self.0 <<= 2;
+        self.0 |= c as u64;
+        self.0 &= mask;
     }
-
-    fn push_char(&self, c: u8) -> Code {
-        Code((self.hash() << 2) + (pack_symbol(c) as u64))
-    }
-
-    fn rotate(&self, c: u8, frame: usize) -> Code {
-        Code(self.push_char(c).hash() & ((1u64 << (2 * frame)) - 1))
-    }
-
-    fn pack(string: &str) -> Code {
-        string.bytes().fold(Code(0u64), |a, b| a.push_char(b))
-    }
-
-    fn unpack(&self, frame: usize) -> String {
-        let mut key = self.hash();
-        let mut result = Vec::new();
-        for _ in (0..frame) {
-            result.push(unpack_symbol((key as u8) & 3));
-            key >>= 2;
+    fn from_str(s: &str) -> Code {
+        let mask = Code::make_mask(s.len());
+        let mut res = Code(0);
+        for c in s.as_bytes() {
+            res.push(Code::encode(*c), mask);
         }
-
-        result.reverse();
-        String::from_utf8(result).unwrap()
+        res
+    }
+    fn to_string(&self, frame: usize) -> String {
+        let mut res = vec![];
+        let mut code = self.0;
+        for _ in 0..frame {
+            let c = match code as u8 & 0b11 {
+                c if c == Code::encode(b'A') => b'A',
+                c if c == Code::encode(b'T') => b'T',
+                c if c == Code::encode(b'G') => b'G',
+                c if c == Code::encode(b'C') => b'C',
+                _ => unreachable!(),
+            };
+            res.push(c);
+            code >>= 2;
+        }
+        res.reverse();
+        String::from_utf8(res).unwrap()
+    }
+    fn make_mask(frame: usize) -> u64 {
+        (1u64 << (2 * frame)) - 1
+    }
+    fn encode(c: u8) -> u8 {
+        (c & 0b110) >> 1
     }
 }
 
-// Hash table implementation
-
-trait TableCallback {
-    fn f(&self, entry: &mut Entry);
-}
-
-struct BumpCallback;
-
-impl TableCallback for BumpCallback {
-    fn f(&self, entry: &mut Entry) {
-        entry.count += 1;
-    }
-}
-
-struct PrintCallback(&'static str);
-
-impl TableCallback for PrintCallback {
-    fn f(&self, entry: &mut Entry) {
-        let PrintCallback(s) = *self;
-        println!("{}\t{}", entry.count, s);
-    }
-}
-
-struct Entry {
+struct Iter<'a> {
+    iter: std::slice::Iter<'a, u8>,
     code: Code,
-    count: usize,
-    next: Option<Box<Entry>>,
+    mask: u64,
 }
-
-struct Table {
-    items: Vec<Option<Box<Entry>>>
-}
-
-struct Items<'a> {
-    cur: Option<&'a Entry>,
-    items: slice::Iter<'a, Option<Box<Entry>>>,
-}
-
-impl Table {
-    fn new() -> Table {
-        Table {
-            items: (0..TABLE_SIZE).map(|_| None).collect()
+impl<'a> Iter<'a> {
+    fn new(input: &[u8], frame: usize) -> Iter {
+        let mut iter = input.iter();
+        let mut code = Code(0);
+        let mask = Code::make_mask(frame);
+        for c in iter.by_ref().take(frame - 1) {
+            code.push(*c, mask);
+        }
+        Iter {
+            iter: iter,
+            code: code,
+            mask: mask,
         }
     }
-
-    fn search_remainder<C:TableCallback>(item: &mut Entry, key: Code, c: C) {
-        match item.next {
-            None => {
-                let mut entry = Box::new(Entry {
-                    code: key,
-                    count: 0,
-                    next: None,
-                });
-                c.f(&mut *entry);
-                item.next = Some(entry);
-            }
-            Some(ref mut entry) => {
-                if entry.code == key {
-                    c.f(&mut **entry);
-                    return;
-                }
-
-                Table::search_remainder(&mut **entry, key, c)
-            }
-        }
-    }
-
-    fn lookup<C:TableCallback>(&mut self, key: Code, c: C) {
-        let index = key.hash() % (TABLE_SIZE as u64);
-
-        {
-            if self.items[index as usize].is_none() {
-                let mut entry = Box::new(Entry {
-                    code: key,
-                    count: 0,
-                    next: None,
-                });
-                c.f(&mut *entry);
-                self.items[index as usize] = Some(entry);
-                return;
-            }
-        }
-
-        {
-            let entry = self.items[index as usize].as_mut().unwrap();
-            if entry.code == key {
-                c.f(&mut **entry);
-                return;
-            }
-
-            Table::search_remainder(&mut **entry, key, c)
-        }
-    }
-
-    fn iter(&self) -> Items {
-        Items { cur: None, items: self.items.iter() }
+}
+impl<'a> Iterator for Iter<'a> {
+    type Item = Code;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|&c| {
+            self.code.push(c, self.mask);
+            self.code
+        })
     }
 }
 
-impl<'a> Iterator for Items<'a> {
-    type Item = &'a Entry;
-
-    fn next(&mut self) -> Option<&'a Entry> {
-        let ret = match self.cur {
-            None => {
-                let i;
-                loop {
-                    match self.items.next() {
-                        None => return None,
-                        Some(&None) => {}
-                        Some(&Some(ref a)) => { i = &**a; break }
-                    }
-                }
-                self.cur = Some(&*i);
-                &*i
-            }
-            Some(c) => c
-        };
-        match ret.next {
-            None => { self.cur = None; }
-            Some(ref next) => { self.cur = Some(&**next); }
-        }
-        return Some(ret);
-    }
-}
-
-// Main program
-
-fn pack_symbol(c: u8) -> u8 {
-    match c as char {
-        'A' => 0,
-        'C' => 1,
-        'G' => 2,
-        'T' => 3,
-        _ => panic!("{}", c as char),
-    }
-}
-
-fn unpack_symbol(c: u8) -> u8 {
-    TABLE[c as usize]
-}
-
-fn generate_frequencies(mut input: &[u8], frame: usize) -> Table {
-    let mut frequencies = Table::new();
-    if input.len() < frame { return frequencies; }
-    let mut code = Code(0);
-
-    // Pull first frame.
-    for _ in (0..frame) {
-        code = code.push_char(input[0]);
-        input = &input[1..];
-    }
-    frequencies.lookup(code, BumpCallback);
-
-    while input.len() != 0 && input[0] != ('>' as u8) {
-        code = code.rotate(input[0], frame);
-        frequencies.lookup(code, BumpCallback);
-        input = &input[1..];
+fn generate_frequencies(input: &[u8], frame: usize) -> Map {
+    let mut frequencies = Map::default();
+    for code in Iter::new(input, frame) {
+        *frequencies.entry(code).or_insert(0) += 1;
     }
     frequencies
 }
 
-fn print_frequencies(frequencies: &Table, frame: usize) {
-    let mut vector = Vec::new();
-    for entry in frequencies.iter() {
-        vector.push((entry.count, entry.code));
-    }
+fn print_frequencies(frequencies: &Map, frame: usize) {
+    let mut vector: Vec<_> = frequencies.iter().map(|(&code, &count)| (count, code)).collect();
     vector.sort();
-
-    let mut total_count = 0;
-    for &(count, _) in vector.iter() {
-        total_count += count;
-    }
+    let total_count = vector.iter().map(|&(count, _)| count).sum::<u32>() as f32;
 
     for &(count, key) in vector.iter().rev() {
-        println!("{} {:.3}",
-                 key.unpack(frame),
-                 (count as f32 * 100.0) / (total_count as f32));
+        println!("{} {:.3}", key.to_string(frame), (count as f32 * 100.0) / total_count);
     }
     println!("");
 }
 
-fn print_occurrences(frequencies: &mut Table, occurrence: &'static str) {
-    frequencies.lookup(Code::pack(occurrence), PrintCallback(occurrence))
+fn print_occurrences(frequencies: &Map, occurrence: &'static str) {
+    println!("{}\t{}", frequencies[&Code::from_str(occurrence)], occurrence);
 }
 
 fn get_sequence<R: std::io::BufRead>(r: R, key: &str) -> Vec<u8> {
     let mut res = Vec::new();
-    for l in r.lines().map(|l| l.ok().unwrap())
-        .skip_while(|l| key != &l[..key.len()]).skip(1)
-    {
-        use std::ascii::AsciiExt;
-        res.extend(l.trim().as_bytes().iter().map(|b| b.to_ascii_uppercase()));
+    for l in r.lines().map(|l| l.unwrap()).skip_while(|l| !l.starts_with(key)).skip(1) {
+        res.extend(l.trim().as_bytes().iter().cloned().map(Code::encode));
     }
     res
 }
@@ -257,19 +146,18 @@ fn main() {
     let input = get_sequence(stdin.lock(), ">THREE");
     let input = Arc::new(input);
 
-    let nb_freqs: Vec<_> = (1usize..3).map(|i| {
-        let input = input.clone();
-        (i, thread::spawn(move|| generate_frequencies(&input, i)))
-    }).collect();
-    let occ_freqs: Vec<_> = OCCURRENCES.iter().map(|&occ| {
+    let occ_freqs: Vec<_> = OCCURRENCES.iter().skip(2).map(|&occ| {
         let input = input.clone();
         thread::spawn(move|| generate_frequencies(&input, occ.len()))
     }).collect();
 
-    for (i, freq) in nb_freqs.into_iter() {
-        print_frequencies(&freq.join().unwrap(), i);
+    for i in 1..3 {
+        print_frequencies(&generate_frequencies(&input, i), i);
     }
-    for (&occ, freq) in OCCURRENCES.iter().zip(occ_freqs.into_iter()) {
-        print_occurrences(&mut freq.join().unwrap(), occ);
+    for &occ in OCCURRENCES.iter().take(2) {
+        print_occurrences(&generate_frequencies(&input, occ.len()), occ);
+    }
+    for (&occ, freq) in OCCURRENCES.iter().skip(2).zip(occ_freqs.into_iter()) {
+        print_occurrences(&freq.join().unwrap(), occ);
     }
 }
