@@ -5,6 +5,7 @@ RUSTC_FLAGS += -L ./lib
 REGEX ?= regex-0.1.69
 ARENA ?= typed-arena-1.1.0
 NUM_CPU ?= num_cpus-0.2.11
+FNV ?= fnv-1.0.5
 
 version=$(lastword $(subst -,  , $1))
 crate=$(strip $(subst -$(call version, $1),, $1))
@@ -32,6 +33,7 @@ bin/fasta_redux: src/fasta_redux.rs lib/$(NUM_CPU).pkg
 
 bin/regex_dna: src/regex_dna.rs lib/$(REGEX).pkg
 
+bin/k_nucleotide: src/k_nucleotide.rs lib/$(FNV).pkg
 lib/%.pkg:
 	mkdir -p tmp
 	rm -rf tmp/$(call crate,$*)-deps
