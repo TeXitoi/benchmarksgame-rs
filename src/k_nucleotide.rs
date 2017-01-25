@@ -11,17 +11,13 @@ use std::thread;
 
 type Map = fnv::FnvHashMap<Code, u32>;
 
-static TABLE: [u8;4] = [ 'A' as u8, 'C' as u8, 'G' as u8, 'T' as u8 ];
-
-static OCCURRENCES: [&'static str;5] = [
+static OCCURRENCES: [&'static str; 5] = [
     "GGT",
     "GGTA",
     "GGTATT",
     "GGTATTTTAATT",
     "GGTATTTTAATTTATAGT",
 ];
-
-// Code implementation
 
 #[derive(Hash, PartialEq, PartialOrd, Ord, Eq, Clone, Copy)]
 struct Code(u64);
@@ -33,22 +29,22 @@ impl Code {
     }
 
     fn push_char(&self, c: u8) -> Code {
-        Code((self.hash() << 2) + (pack_symbol(c) as u64))
+        Code((self.hash() << 2) | (c as u64))
     }
 
-    fn rotate(&self, c: u8, frame: usize) -> Code {
-        Code(self.push_char(c).hash() & ((1u64 << (2 * frame)) - 1))
+    fn rotate(&self, c: u8, mask: u64) -> Code {
+        Code(self.push_char(c).hash() & mask)
     }
 
     fn pack(string: &str) -> Code {
-        string.bytes().fold(Code(0u64), |a, b| a.push_char(b))
+        string.bytes().fold(Code(0u64), |a, b| a.push_char(pack_symbol(b)))
     }
 
     fn unpack(&self, frame: usize) -> String {
         let mut key = self.hash();
         let mut result = Vec::new();
         for _ in 0..frame {
-            result.push(unpack_symbol((key as u8) & 3));
+            result.push(unpack_symbol((key as u8) & 0b11));
             key >>= 2;
         }
 
@@ -57,56 +53,49 @@ impl Code {
     }
 }
 
+fn make_mask(frame: usize) -> u64 {
+    (1u64 << (2 * frame)) - 1
+}
+
 fn pack_symbol(c: u8) -> u8 {
-    match c as char {
-        'A' => 0,
-        'C' => 1,
-        'G' => 2,
-        'T' => 3,
-        _ => panic!("{}", c as char),
-    }
+    (c & 0b110) >> 1
 }
 
 fn unpack_symbol(c: u8) -> u8 {
-    TABLE[c as usize]
+    match c {
+        c if c == pack_symbol(b'A') => b'A',
+        c if c == pack_symbol(b'T') => b'T',
+        c if c == pack_symbol(b'G') => b'G',
+        c if c == pack_symbol(b'C') => b'C',
+        _ => unreachable!(),
+    }
 }
 
-fn generate_frequencies(mut input: &[u8], frame: usize) -> Map {
+fn generate_frequencies(input: &[u8], frame: usize) -> Map {
     let mut frequencies = Map::default();
     if input.len() < frame { return frequencies; }
     let mut code = Code(0);
+    let mut iter = input.iter().cloned();
 
-    // Pull first frame.
-    for _ in 0..frame {
-        code = code.push_char(input[0]);
-        input = &input[1..];
+    for c in iter.by_ref().take(frame - 1) {
+        code = code.push_char(c);
     }
-    *frequencies.entry(code).or_insert(0) += 1;
 
-    while input.len() != 0 && input[0] != ('>' as u8) {
-        code = code.rotate(input[0], frame);
+    let mask = make_mask(frame);
+    for c in iter {
+        code = code.rotate(c, mask);
         *frequencies.entry(code).or_insert(0) += 1;
-        input = &input[1..];
     }
     frequencies
 }
 
 fn print_frequencies(frequencies: &Map, frame: usize) {
-    let mut vector = Vec::new();
-    for (&code, &count) in frequencies.iter() {
-        vector.push((count, code));
-    }
+    let mut vector: Vec<_> = frequencies.iter().map(|(&code, &count)| (count, code)).collect();
     vector.sort();
-
-    let mut total_count = 0;
-    for &(count, _) in vector.iter() {
-        total_count += count;
-    }
+    let total_count = vector.iter().map(|&(count, _)| count).sum::<u32>() as f32;
 
     for &(count, key) in vector.iter().rev() {
-        println!("{} {:.3}",
-                 key.unpack(frame),
-                 (count as f32 * 100.0) / (total_count as f32));
+        println!("{} {:.3}", key.unpack(frame), (count as f32 * 100.0) / total_count);
     }
     println!("");
 }
@@ -117,11 +106,8 @@ fn print_occurrences(frequencies: &Map, occurrence: &'static str) {
 
 fn get_sequence<R: std::io::BufRead>(r: R, key: &str) -> Vec<u8> {
     let mut res = Vec::new();
-    for l in r.lines().map(|l| l.ok().unwrap())
-        .skip_while(|l| key != &l[..key.len()]).skip(1)
-    {
-        use std::ascii::AsciiExt;
-        res.extend(l.trim().as_bytes().iter().map(|b| b.to_ascii_uppercase()));
+    for l in r.lines().map(|l| l.unwrap()).skip_while(|l| !l.starts_with(key)).skip(1) {
+        res.extend(l.trim().as_bytes().iter().cloned().map(pack_symbol));
     }
     res
 }
@@ -131,7 +117,7 @@ fn main() {
     let input = get_sequence(stdin.lock(), ">THREE");
     let input = Arc::new(input);
 
-    let occ_freqs: Vec<_> = OCCURRENCES.iter().map(|&occ| {
+    let occ_freqs: Vec<_> = OCCURRENCES.iter().skip(2).map(|&occ| {
         let input = input.clone();
         thread::spawn(move|| generate_frequencies(&input, occ.len()))
     }).collect();
@@ -139,7 +125,10 @@ fn main() {
     for i in 1..3 {
         print_frequencies(&generate_frequencies(&input, i), i);
     }
-    for (&occ, freq) in OCCURRENCES.iter().zip(occ_freqs.into_iter()) {
-        print_occurrences(&mut freq.join().unwrap(), occ);
+    for &occ in OCCURRENCES.iter().take(2) {
+        print_occurrences(&generate_frequencies(&input, occ.len()), occ);
+    }
+    for (&occ, freq) in OCCURRENCES.iter().skip(2).zip(occ_freqs.into_iter()) {
+        print_occurrences(&freq.join().unwrap(), occ);
     }
 }
