@@ -18,7 +18,7 @@ extern crate num_cpus;
 
 
 use std::cmp::min;
-use std::io::{self, Write};
+use std::io;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -243,7 +243,7 @@ fn fasta<W: io::Write + Send + 'static>(
 
     let thread_count = num_cpus::get();
     let mut threads = Vec::new();
-    for block_num in (0..thread_count) {
+    for block_num in 0..thread_count {
         let offset = BLOCK_THOROUGHPUT * block_num;
 
         let local_submitter = submitter.clone();
