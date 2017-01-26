@@ -23,67 +23,77 @@ static OCCURRENCES: [&'static str; 5] = [
 struct Code(u64);
 
 impl Code {
-    fn hash(&self) -> u64 {
-        let Code(ret) = *self;
-        return ret;
+    fn push(&mut self, c: u8, mask: u64) {
+        self.0 <<= 2;
+        self.0 |= c as u64;
+        self.0 &= mask;
     }
-
-    fn push_char(&self, c: u8) -> Code {
-        Code((self.hash() << 2) | (c as u64))
-    }
-
-    fn rotate(&self, c: u8, mask: u64) -> Code {
-        Code(self.push_char(c).hash() & mask)
-    }
-
-    fn pack(string: &str) -> Code {
-        string.bytes().fold(Code(0u64), |a, b| a.push_char(pack_symbol(b)))
-    }
-
-    fn unpack(&self, frame: usize) -> String {
-        let mut key = self.hash();
-        let mut result = Vec::new();
-        for _ in 0..frame {
-            result.push(unpack_symbol((key as u8) & 0b11));
-            key >>= 2;
+    fn from_str(s: &str) -> Code {
+        let mask = Code::make_mask(s.len());
+        let mut res = Code(0);
+        for c in s.as_bytes() {
+            res.push(Code::encode(*c), mask);
         }
-
-        result.reverse();
-        String::from_utf8(result).unwrap()
+        res
+    }
+    fn to_string(&self, frame: usize) -> String {
+        let mut res = vec![];
+        let mut code = self.0;
+        for _ in 0..frame {
+            let c = match code as u8 & 0b11 {
+                c if c == Code::encode(b'A') => b'A',
+                c if c == Code::encode(b'T') => b'T',
+                c if c == Code::encode(b'G') => b'G',
+                c if c == Code::encode(b'C') => b'C',
+                _ => unreachable!(),
+            };
+            res.push(c);
+            code >>= 2;
+        }
+        res.reverse();
+        String::from_utf8(res).unwrap()
+    }
+    fn make_mask(frame: usize) -> u64 {
+        (1u64 << (2 * frame)) - 1
+    }
+    fn encode(c: u8) -> u8 {
+        (c & 0b110) >> 1
     }
 }
 
-fn make_mask(frame: usize) -> u64 {
-    (1u64 << (2 * frame)) - 1
+struct Iter<'a> {
+    iter: std::slice::Iter<'a, u8>,
+    code: Code,
+    mask: u64,
 }
-
-fn pack_symbol(c: u8) -> u8 {
-    (c & 0b110) >> 1
+impl<'a> Iter<'a> {
+    fn new(input: &[u8], frame: usize) -> Iter {
+        let mut iter = input.iter();
+        let mut code = Code(0);
+        let mask = Code::make_mask(frame);
+        for c in iter.by_ref().take(frame - 1) {
+            code.push(*c, mask);
+        }
+        Iter {
+            iter: iter,
+            code: code,
+            mask: mask,
+        }
+    }
 }
-
-fn unpack_symbol(c: u8) -> u8 {
-    match c {
-        c if c == pack_symbol(b'A') => b'A',
-        c if c == pack_symbol(b'T') => b'T',
-        c if c == pack_symbol(b'G') => b'G',
-        c if c == pack_symbol(b'C') => b'C',
-        _ => unreachable!(),
+impl<'a> Iterator for Iter<'a> {
+    type Item = Code;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|&c| {
+            self.code.push(c, self.mask);
+            self.code
+        })
     }
 }
 
 fn generate_frequencies(input: &[u8], frame: usize) -> Map {
     let mut frequencies = Map::default();
-    if input.len() < frame { return frequencies; }
-    let mut code = Code(0);
-    let mut iter = input.iter().cloned();
-
-    for c in iter.by_ref().take(frame - 1) {
-        code = code.push_char(c);
-    }
-
-    let mask = make_mask(frame);
-    for c in iter {
-        code = code.rotate(c, mask);
+    for code in Iter::new(input, frame) {
         *frequencies.entry(code).or_insert(0) += 1;
     }
     frequencies
@@ -95,19 +105,19 @@ fn print_frequencies(frequencies: &Map, frame: usize) {
     let total_count = vector.iter().map(|&(count, _)| count).sum::<u32>() as f32;
 
     for &(count, key) in vector.iter().rev() {
-        println!("{} {:.3}", key.unpack(frame), (count as f32 * 100.0) / total_count);
+        println!("{} {:.3}", key.to_string(frame), (count as f32 * 100.0) / total_count);
     }
     println!("");
 }
 
 fn print_occurrences(frequencies: &Map, occurrence: &'static str) {
-    println!("{}\t{}", frequencies[&Code::pack(occurrence)], occurrence);
+    println!("{}\t{}", frequencies[&Code::from_str(occurrence)], occurrence);
 }
 
 fn get_sequence<R: std::io::BufRead>(r: R, key: &str) -> Vec<u8> {
     let mut res = Vec::new();
     for l in r.lines().map(|l| l.unwrap()).skip_while(|l| !l.starts_with(key)).skip(1) {
-        res.extend(l.trim().as_bytes().iter().cloned().map(pack_symbol));
+        res.extend(l.trim().as_bytes().iter().cloned().map(Code::encode));
     }
     res
 }
