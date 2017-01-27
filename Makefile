@@ -4,7 +4,8 @@ RUSTC_FLAGS ?= -C opt-level=3 -C target-cpu=core2 -C lto
 RUSTC_FLAGS += -L ./lib
 REGEX ?= regex-0.1.69
 ARENA ?= typed-arena-1.1.0
-NUM_CPU ?= num_cpus-0.2.11
+NUM_CPU ?= num_cpus-1.2.1
+FUTURES_CPUPOOL ?= futures-cpupool-0.1.2
 
 version=$(lastword $(subst -,  , $1))
 crate=$(strip $(subst -$(call version, $1),, $1))
@@ -29,6 +30,8 @@ bin/binary_trees: src/binary_trees.rs lib/$(ARENA).pkg
 bin/fasta: src/fasta.rs lib/$(NUM_CPU).pkg
 
 bin/fasta_redux: src/fasta_redux.rs lib/$(NUM_CPU).pkg
+
+bin/k_nucleotide: src/k_nucleotide.rs lib/$(FUTURES_CPUPOOL).pkg
 
 bin/regex_dna: src/regex_dna.rs lib/$(REGEX).pkg
 
