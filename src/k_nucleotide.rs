@@ -4,10 +4,15 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 
+extern crate futures;
+extern crate futures_cpupool;
+
 use std::sync::Arc;
-use std::thread;
 use std::hash::{Hasher, BuildHasherDefault};
 use std::collections::HashMap;
+use futures::Future;
+use futures_cpupool::CpuPool;
+use Item::*;
 
 struct NaiveHasher(u64);
 impl Default for NaiveHasher {
@@ -29,14 +34,6 @@ impl Hasher for NaiveHasher {
 type NaiveBuildHasher = BuildHasherDefault<NaiveHasher>;
 type NaiveHashMap<K, V> = HashMap<K, V, NaiveBuildHasher>;
 type Map = NaiveHashMap<Code, u32>;
-
-static OCCURRENCES: [&'static str; 5] = [
-    "GGT",
-    "GGTA",
-    "GGTATT",
-    "GGTATTTTAATT",
-    "GGTATTTTAATTTATAGT",
-];
 
 #[derive(Hash, PartialEq, PartialOrd, Ord, Eq, Clone, Copy)]
 struct Code(u64);
@@ -118,20 +115,44 @@ fn generate_frequencies(input: &[u8], frame: usize) -> Map {
     frequencies
 }
 
-fn print_frequencies(frequencies: &Map, frame: usize) {
-    let mut vector: Vec<_> = frequencies.iter().map(|(&code, &count)| (count, code)).collect();
-    vector.sort();
-    let total_count = vector.iter().map(|&(count, _)| count).sum::<u32>() as f32;
+#[derive(Clone, Copy)]
+enum Item {
+    Freq(usize),
+    Occ(&'static str),
+}
+impl Item {
+    fn print(&self, freqs: &Map) {
+        match *self {
+            Freq(frame) => {
+                let mut v: Vec<_> = freqs.iter().map(|(&code, &count)| (count, code)).collect();
+                v.sort();
+                let total_count = v.iter().map(|&(count, _)| count).sum::<u32>() as f32;
 
-    for &(count, key) in vector.iter().rev() {
-        println!("{} {:.3}", key.to_string(frame), (count as f32 * 100.0) / total_count);
+                for &(count, key) in v.iter().rev() {
+                    println!("{} {:.3}", key.to_string(frame), (count as f32 * 100.0) / total_count);
+                }
+                println!("");
+            }
+            Occ(occ) => println!("{}\t{}", freqs[&Code::from_str(occ)], occ),
+        }
     }
-    println!("");
+    fn generate_frequencies(&self, input: &[u8]) -> Map {
+        match *self {
+            Freq(frame) => generate_frequencies(input, frame),
+            Occ(occ) => generate_frequencies(input, occ.len()),
+        }
+    }
 }
+static ITEMS: [Item; 7] = [
+    Freq(1),
+    Freq(2),
+    Occ("GGT"),
+    Occ("GGTA"),
+    Occ("GGTATT"),
+    Occ("GGTATTTTAATT"),
+    Occ("GGTATTTTAATTTATAGT"),
+];
 
-fn print_occurrences(frequencies: &Map, occurrence: &'static str) {
-    println!("{}\t{}", frequencies[&Code::from_str(occurrence)], occurrence);
-}
 
 fn get_sequence<R: std::io::BufRead>(r: R, key: &str) -> Vec<u8> {
     let mut res = Vec::new();
@@ -145,19 +166,16 @@ fn main() {
     let stdin = std::io::stdin();
     let input = get_sequence(stdin.lock(), ">THREE");
     let input = Arc::new(input);
+    let pool = CpuPool::new_num_cpus();
 
-    let occ_freqs: Vec<_> = OCCURRENCES.iter().skip(2).map(|&occ| {
+    // In reverse to spawn big tasks first
+    let items: Vec<_> = ITEMS.iter().rev().map(|&item| {
         let input = input.clone();
-        thread::spawn(move|| generate_frequencies(&input, occ.len()))
+        let future = pool.spawn_fn(move || Ok::<_, ()>(item.generate_frequencies(&input)));
+        (item, future)
     }).collect();
 
-    for i in 1..3 {
-        print_frequencies(&generate_frequencies(&input, i), i);
-    }
-    for &occ in OCCURRENCES.iter().take(2) {
-        print_occurrences(&generate_frequencies(&input, occ.len()), occ);
-    }
-    for (&occ, freq) in OCCURRENCES.iter().skip(2).zip(occ_freqs.into_iter()) {
-        print_occurrences(&freq.join().unwrap(), occ);
+    for (item, freq) in items.into_iter().rev() {
+        item.print(&freq.wait().unwrap());
     }
 }
