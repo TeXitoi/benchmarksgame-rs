@@ -9,13 +9,13 @@ use std::thread;
 use std::hash::{Hasher, BuildHasherDefault};
 use std::collections::HashMap;
 
-struct CustomHasher(u64);
-impl Default for CustomHasher {
+struct NaiveHasher(u64);
+impl Default for NaiveHasher {
     fn default() -> Self {
-        CustomHasher(0)
+        NaiveHasher(0)
     }
 }
-impl Hasher for CustomHasher {
+impl Hasher for NaiveHasher {
     fn finish(&self) -> u64 {
         self.0
     }
@@ -26,9 +26,9 @@ impl Hasher for CustomHasher {
         self.0 = i ^ i >> 7;
     }
 }
-type CustomBuildHasher = BuildHasherDefault<CustomHasher>;
-type CustomHashMap<K, V> = HashMap<K, V, CustomBuildHasher>;
-type Map = CustomHashMap<Code, u32>;
+type NaiveBuildHasher = BuildHasherDefault<NaiveHasher>;
+type NaiveHashMap<K, V> = HashMap<K, V, NaiveBuildHasher>;
+type Map = NaiveHashMap<Code, u32>;
 
 static OCCURRENCES: [&'static str; 5] = [
     "GGT",
