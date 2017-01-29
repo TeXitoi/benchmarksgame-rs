@@ -37,7 +37,6 @@ type Map = NaiveHashMap<Code, u32>;
 
 #[derive(Hash, PartialEq, PartialOrd, Ord, Eq, Clone, Copy)]
 struct Code(u64);
-
 impl Code {
     fn push(&mut self, c: u8, mask: u64) {
         self.0 <<= 2;
@@ -107,12 +106,12 @@ impl<'a> Iterator for Iter<'a> {
     }
 }
 
-fn generate_frequencies(input: &[u8], frame: usize) -> Map {
-    let mut frequencies = Map::default();
+fn gen_freq(input: &[u8], frame: usize) -> Map {
+    let mut freq = Map::default();
     for code in Iter::new(input, frame) {
-        *frequencies.entry(code).or_insert(0) += 1;
+        *freq.entry(code).or_insert(0) += 1;
     }
-    frequencies
+    freq
 }
 
 #[derive(Clone, Copy)]
@@ -121,25 +120,24 @@ enum Item {
     Occ(&'static str),
 }
 impl Item {
-    fn print(&self, freqs: &Map) {
+    fn print(&self, freq: &Map) {
         match *self {
             Freq(frame) => {
-                let mut v: Vec<_> = freqs.iter().map(|(&code, &count)| (count, code)).collect();
+                let mut v: Vec<_> = freq.iter().map(|(&code, &count)| (count, code)).collect();
                 v.sort();
-                let total_count = v.iter().map(|&(count, _)| count).sum::<u32>() as f32;
-
+                let total = v.iter().map(|&(count, _)| count).sum::<u32>() as f32;
                 for &(count, key) in v.iter().rev() {
-                    println!("{} {:.3}", key.to_string(frame), (count as f32 * 100.0) / total_count);
+                    println!("{} {:.3}", key.to_string(frame), (count as f32 * 100.) / total);
                 }
                 println!("");
             }
-            Occ(occ) => println!("{}\t{}", freqs[&Code::from_str(occ)], occ),
+            Occ(occ) => println!("{}\t{}", freq[&Code::from_str(occ)], occ),
         }
     }
-    fn generate_frequencies(&self, input: &[u8]) -> Map {
+    fn gen_freq(&self, input: &[u8]) -> Map {
         match *self {
-            Freq(frame) => generate_frequencies(input, frame),
-            Occ(occ) => generate_frequencies(input, occ.len()),
+            Freq(frame) => gen_freq(input, frame),
+            Occ(occ) => gen_freq(input, occ.len()),
         }
     }
 }
@@ -154,7 +152,7 @@ static ITEMS: [Item; 7] = [
 ];
 
 
-fn get_sequence<R: std::io::BufRead>(r: R, key: &str) -> Vec<u8> {
+fn get_seq<R: std::io::BufRead>(r: R, key: &str) -> Vec<u8> {
     let mut res = Vec::new();
     for l in r.lines().map(|l| l.unwrap()).skip_while(|l| !l.starts_with(key)).skip(1) {
         res.extend(l.trim().as_bytes().iter().cloned().map(Code::encode));
@@ -164,18 +162,18 @@ fn get_sequence<R: std::io::BufRead>(r: R, key: &str) -> Vec<u8> {
 
 fn main() {
     let stdin = std::io::stdin();
-    let input = get_sequence(stdin.lock(), ">THREE");
+    let input = get_seq(stdin.lock(), ">THREE");
     let input = Arc::new(input);
     let pool = CpuPool::new_num_cpus();
 
     // In reverse to spawn big tasks first
     let items: Vec<_> = ITEMS.iter().rev().map(|&item| {
         let input = input.clone();
-        let future = pool.spawn_fn(move || Ok::<_, ()>(item.generate_frequencies(&input)));
-        (item, future)
+        let future_freq = pool.spawn_fn(move || Ok::<_, ()>(item.gen_freq(&input)));
+        (item, future_freq)
     }).collect();
 
-    for (item, freq) in items.into_iter().rev() {
-        item.print(&freq.wait().unwrap());
+    for (item, future_freq) in items.into_iter().rev() {
+        item.print(&future_freq.wait().unwrap());
     }
 }
