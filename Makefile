@@ -17,23 +17,19 @@ all: $(patsubst src/%.rs,diff/%.diff, $(SOURCES))
 
 clean:
 	rm -fr diff
-
 distclean: clean
 	rm -fr bin out tmp lib
+
+bin/binary_trees: lib/$(ARENA).pkg
+bin/fasta: lib/$(NUM_CPU).pkg
+bin/fasta_redux: lib/$(NUM_CPU).pkg
+bin/k_nucleotide: lib/$(FUTURES_CPUPOOL).pkg
+bin/mandelbrot: lib/$(FUTURES_CPUPOOL).pkg
+bin/regex_dna: lib/$(REGEX).pkg
 
 diff/chameneos_redux.diff: out/chameneos_redux.txt ref/chameneos_redux.txt
 	mkdir -p diff
 	sed -r 's/^[0-9]+/42/' $< | diff -u ref/chameneos_redux.txt - > $@
-
-bin/binary_trees: src/binary_trees.rs lib/$(ARENA).pkg
-
-bin/fasta: src/fasta.rs lib/$(NUM_CPU).pkg
-
-bin/fasta_redux: src/fasta_redux.rs lib/$(NUM_CPU).pkg
-
-bin/k_nucleotide: src/k_nucleotide.rs lib/$(FUTURES_CPUPOOL).pkg
-
-bin/regex_dna: src/regex_dna.rs lib/$(REGEX).pkg
 
 lib/%.pkg:
 	mkdir -p tmp
