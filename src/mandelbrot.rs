@@ -15,7 +15,7 @@ use futures_cpupool::{CpuPool, CpuFuture};
 
 const MAX_ITER: usize = 50;
 const VLEN: usize = 8;
-const ZEROS: Vecf64 = Vecf64([0.0; VLEN]);
+const ZEROS: Vecf64 = Vecf64([0.; VLEN]);
 
 macro_rules! for_vec {
     ( in_each [ $( $val:tt ),* ] do $from:ident $op:tt $other:ident ) => {
@@ -75,18 +75,17 @@ pub fn mbrot8(cr: Vecf64, ci: Vecf64) -> u8 {
 fn main() {
     let size = std::env::args().nth(1).and_then(|n| n.parse().ok()).unwrap_or(200);
     let size = size / VLEN * VLEN;
-    let inv = 2.0 / size as f64;
+    let inv = 2. / size as f64;
     let mut xloc = vec![ZEROS; size / VLEN];
     for i in 0..size {
         xloc[i / VLEN].0[i % VLEN] = i as f64 * inv - 1.5;
     }
     let xloc = Arc::new(xloc);
-    let yloc: Vec<_> = (0..size).map(|i| i as f64 * inv - 1.0).collect();
     let pool = CpuPool::new_num_cpus();
 
     let future_rows: Vec<CpuFuture<Vec<_>, ()>> = (0..size).map(|y| {
         let xloc = xloc.clone();
-        let ci = Vecf64([yloc[y]; VLEN]);
+        let ci = Vecf64([y as f64 * inv - 1.; VLEN]);
         pool.spawn_fn(move || Ok((0..size / VLEN).map(|x| mbrot8(xloc[x], ci)).collect()))
     }).collect();
 
@@ -96,5 +95,4 @@ fn main() {
     for row in future_rows {
         stdout.write_all(&row.wait().unwrap()).unwrap();
     }
-    stdout.flush().unwrap();
 }
