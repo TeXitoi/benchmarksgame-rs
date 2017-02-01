@@ -4,11 +4,15 @@
 // contributed by Matt Watson
 // contributed by TeXitoi
 
-use std::io::Write;
-use std::thread;
-use std::ops::{Add, Mul, Sub};
+extern crate futures;
+extern crate futures_cpupool;
 
-const THREADS: usize = 20;
+use std::io::Write;
+use std::ops::{Add, Mul, Sub};
+use std::sync::Arc;
+use futures::Future;
+use futures_cpupool::{CpuPool, CpuFuture};
+
 const MAX_ITER: usize = 50;
 const VLEN: usize = 8;
 const ZEROS: Vecf64 = Vecf64([0.0; VLEN]);
@@ -69,44 +73,28 @@ pub fn mbrot8(cr: Vecf64, ci: Vecf64) -> u8 {
 }
 
 fn main() {
-    let size = std::env::args().nth(1)
-        .and_then(|n| n.parse().ok())
-        .unwrap_or(200);
+    let size = std::env::args().nth(1).and_then(|n| n.parse().ok()).unwrap_or(200);
+    let size = size / VLEN * VLEN;
     let inv = 2.0 / size as f64;
-    let mut xvals = vec![0.0; size];
-    let mut yvals = vec![0.0; size];
+    let mut xloc = vec![ZEROS; size / VLEN];
     for i in 0..size {
-        xvals[i] = i as f64 * inv - 1.5;
-        yvals[i] = i as f64 * inv - 1.0;
+        xloc[i / VLEN].0[i % VLEN] = i as f64 * inv - 1.5;
     }
-    let xloc = &xvals;
-    let yloc = &yvals;
+    let xloc = Arc::new(xloc);
+    let yloc: Vec<_> = (0..size).map(|i| i as f64 * inv - 1.0).collect();
+    let pool = CpuPool::new_num_cpus();
 
-    assert!(size % THREADS == 0);// FIXME
-    let handles: Vec<_> = (0..THREADS).map(|e| {
-        let xloc = xloc.to_vec();
-        let yloc = yloc.to_vec();
-        thread::spawn(move || {
-            let mut rows = vec![vec![0 as u8; size / 8]; size / THREADS];
-            for y in 0..size / THREADS {
-                for x in 0..size / 8 {
-                    let mut cr = ZEROS;
-                    let ci = Vecf64([yloc[y + e * size / THREADS]; VLEN]);
-                    for i in 0..VLEN {
-                        cr.0[i] = xloc[8 * x + i];
-                    }
-                    rows[y][x] = mbrot8(cr, ci);
-                }
-            }
-            rows
-        })
+    let future_rows: Vec<CpuFuture<Vec<_>, ()>> = (0..size).map(|y| {
+        let xloc = xloc.clone();
+        let ci = Vecf64([yloc[y]; VLEN]);
+        pool.spawn_fn(move || Ok((0..size / VLEN).map(|x| mbrot8(xloc[x], ci)).collect()))
     }).collect();
 
     println!("P4\n{} {}", size, size);
     let stdout_unlocked = std::io::stdout();
     let mut stdout = stdout_unlocked.lock();
-    for row in handles.into_iter().flat_map(|h| h.join().unwrap().into_iter()) {
-        stdout.write_all(&row).unwrap();
+    for row in future_rows {
+        stdout.write_all(&row.wait().unwrap()).unwrap();
     }
     stdout.flush().unwrap();
 }
