@@ -2,8 +2,8 @@
 // http://benchmarksgame.alioth.debian.org/
 //
 // contributed by the Rust Project Developers
-// contributed by TeXitoi
 // contributed by Cristi Cobzarenco (@cristicbz)
+// contributed by TeXitoi
 
 extern crate futures;
 extern crate futures_cpupool;
