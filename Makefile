@@ -2,7 +2,7 @@ SOURCES = $(wildcard src/*.rs)
 RUSTC ?= rustc
 RUSTC_FLAGS ?= -C opt-level=3 -C target-cpu=core2 -C lto
 RUSTC_FLAGS += -L ./lib
-REGEX ?= regex-0.1.69
+REGEX ?= regex-0.2.1
 ARENA ?= typed-arena-1.1.0
 NUM_CPU ?= num_cpus-1.2.1
 FUTURES_CPUPOOL ?= futures-cpupool-0.1.2
