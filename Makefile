@@ -6,6 +6,7 @@ REGEX ?= regex-0.1.69
 ARENA ?= typed-arena-1.1.0
 NUM_CPU ?= num_cpus-1.2.1
 FUTURES_CPUPOOL ?= futures-cpupool-0.1.2
+ORDERMAP ?= ordermap-0.2.7
 
 version=$(lastword $(subst -,  , $1))
 crate=$(strip $(subst -$(call version, $1),, $1))
@@ -23,7 +24,7 @@ distclean: clean
 bin/binary_trees: lib/$(ARENA).pkg
 bin/fasta: lib/$(NUM_CPU).pkg
 bin/fasta_redux: lib/$(NUM_CPU).pkg
-bin/k_nucleotide: lib/$(FUTURES_CPUPOOL).pkg
+bin/k_nucleotide: lib/$(FUTURES_CPUPOOL).pkg lib/$(ORDERMAP).pkg
 bin/mandelbrot: lib/$(FUTURES_CPUPOOL).pkg
 bin/regex_dna: lib/$(REGEX).pkg
 
