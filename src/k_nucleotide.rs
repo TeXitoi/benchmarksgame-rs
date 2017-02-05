@@ -3,6 +3,7 @@
 //
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
+// contributed by Cristi Cobzarenco (@cristicbz)
 
 extern crate futures;
 extern crate futures_cpupool;
@@ -153,17 +154,32 @@ static ITEMS: [Item; 7] = [
 ];
 
 
-fn get_seq<R: std::io::BufRead>(r: R, key: &str) -> Vec<u8> {
-    let mut res = Vec::new();
-    for l in r.lines().map(|l| l.unwrap()).skip_while(|l| !l.starts_with(key)).skip(1) {
-        res.extend(l.trim().as_bytes().iter().cloned().map(Code::encode));
+fn get_seq<R: std::io::BufRead>(mut r: R, key: &[u8]) -> Vec<u8> {
+    let mut res = Vec::with_capacity(65536);
+    let mut line = Vec::with_capacity(64);
+
+    loop {
+        match r.read_until(b'\n', &mut line) {
+            Ok(b) if b > 0 => if line.starts_with(key) { break },
+            _ => break,
+        }
+        line.clear();
     }
+
+    loop {
+        line.clear();
+        match r.read_until(b'\n', &mut line) {
+            Ok(b) if b > 0 => res.extend(line[..line.len()-1].iter().cloned().map(Code::encode)),
+            _ => break,
+        }
+    }
+
     res
 }
 
 fn main() {
     let stdin = std::io::stdin();
-    let input = get_seq(stdin.lock(), ">THREE");
+    let input = get_seq(stdin.lock(), b">THREE");
     let input = Arc::new(input);
     let pool = CpuPool::new_num_cpus();
 
