@@ -6,13 +6,14 @@
 
 extern crate futures;
 extern crate futures_cpupool;
+extern crate ordermap;
 
 use std::sync::Arc;
 use std::hash::{Hasher, BuildHasherDefault};
-use std::collections::HashMap;
 use futures::Future;
 use futures_cpupool::CpuPool;
 use Item::*;
+use ordermap::OrderMap;
 
 struct NaiveHasher(u64);
 impl Default for NaiveHasher {
@@ -32,7 +33,7 @@ impl Hasher for NaiveHasher {
     }
 }
 type NaiveBuildHasher = BuildHasherDefault<NaiveHasher>;
-type NaiveHashMap<K, V> = HashMap<K, V, NaiveBuildHasher>;
+type NaiveHashMap<K, V> = OrderMap<K, V, NaiveBuildHasher>;
 type Map = NaiveHashMap<Code, u32>;
 
 #[derive(Hash, PartialEq, PartialOrd, Ord, Eq, Clone, Copy)]
