@@ -2,6 +2,7 @@
 // http://benchmarksgame.alioth.debian.org/
 //
 // contributed by the Rust Project Developers
+// contributed by Matt Brubeck
 // contributed by TeXitoi
 
 //extern crate libc;
@@ -20,6 +21,8 @@ mod libc {
 use std::io::{Read, Write};
 use std::ptr::copy;
 use std::thread;
+use std::fs::File;
+use std::os::unix::io::FromRawFd;
 
 struct Tables {
     table8: [u8;1 << 8],
@@ -187,10 +190,15 @@ fn parallel<'a, I, T, F>(iter: I, ref f: F)
     for jh in jhs { jh.join().unwrap(); }
 }
 
+fn file_size(f: &mut File) -> std::io::Result<usize> {
+    Ok(f.metadata()?.len() as usize)
+}
+
 fn main() {
-    let stdin = std::io::stdin();
-    let mut data = Vec::with_capacity(1024 * 1024);
-    stdin.lock().read_to_end(&mut data).unwrap();
+    let mut stdin = unsafe { File::from_raw_fd(0) };
+    let size = file_size(&mut stdin).unwrap_or(1024 * 1024);
+    let mut data = Vec::with_capacity(size + 1);
+    stdin.read_to_end(&mut data).unwrap();
     let tables = &Tables::new();
     parallel(mut_dna_seqs(&mut data), |seq| reverse_complement(seq, tables));
     let stdout = std::io::stdout();
