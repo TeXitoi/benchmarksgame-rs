@@ -2,6 +2,7 @@
 // http://benchmarksgame.alioth.debian.org/
 //
 // contributed by the Rust Project Developers
+// contributed by Matt Brubeck
 // contributed by TeXitoi
 
 extern crate typed_arena;
@@ -15,10 +16,10 @@ struct Tree<'a> {
     i: i32
 }
 
-fn item_check(t: &Option<&Tree>) -> i32 {
-    match *t {
+fn item_check(t: Option<&Tree>) -> i32 {
+    match t {
         None => 0,
-        Some(&Tree { ref l, ref r, i }) => i + item_check(l) - item_check(r)
+        Some(&Tree { l, r, i }) => i + item_check(l) - item_check(r)
     }
 }
 
@@ -42,7 +43,7 @@ fn inner(depth: i32, iterations: i32) -> String {
         let arena = Arena::new();
         let a = bottom_up_tree(&arena, i, depth);
         let b = bottom_up_tree(&arena, -i, depth);
-        chk += item_check(&a) + item_check(&b);
+        chk += item_check(a) + item_check(b);
     }
     format!("{}\t trees of depth {}\t check: {}",
             iterations * 2, depth, chk)
@@ -62,7 +63,7 @@ fn main() {
         let tree = bottom_up_tree(&arena, 0, depth);
 
         println!("stretch tree of depth {}\t check: {}",
-                 depth, item_check(&tree));
+                 depth, item_check(tree));
     }
 
     let long_lived_arena = Arena::new();
@@ -78,5 +79,5 @@ fn main() {
     }
 
     println!("long lived tree of depth {}\t check: {}",
-             max_depth, item_check(&long_lived_tree));
+             max_depth, item_check(long_lived_tree));
 }
