@@ -2,6 +2,7 @@
 // http://benchmarksgame.alioth.debian.org/
 //
 // contributed by the Rust Project Developers
+// contributed by Matt Brubeck
 // contributed by TeXitoi
 
 const PI: f64 = 3.141592653589793;
@@ -68,7 +69,8 @@ struct Planet {
 fn advance(bodies: &mut [Planet;N_BODIES], dt: f64, steps: i32) {
     for _ in 0..steps {
         let mut b_slice: &mut [_] = bodies;
-        while let Some(bi) = shift_mut_ref(&mut b_slice) {
+        while let Some((bi, tail)) = {b_slice}.split_first_mut() {
+            b_slice = tail;
             let (vx, vy, vz) = b_slice.iter_mut()
                 .fold((bi.vx, bi.vy, bi.vz), |(vx, vy, vz), bj|{
                     let dx = bi.x - bj.x;
@@ -139,14 +141,4 @@ fn main() {
     advance(&mut bodies, 0.01, n);
 
     println!("{:.9}", energy(&bodies));
-}
-
-/// Pop a mutable reference off the head of a slice, mutating the slice to no
-/// longer contain the mutable reference.
-fn shift_mut_ref<'a, T>(r: &mut &'a mut [T]) -> Option<&'a mut T> {
-    if r.is_empty() { return None }
-    let tmp = std::mem::replace(r, &mut []);
-    let (h, t) = tmp.split_at_mut(1);
-    *r = t;
-    Some(&mut h[0])
 }

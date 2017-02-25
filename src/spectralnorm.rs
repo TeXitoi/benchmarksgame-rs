@@ -2,11 +2,11 @@
 // http://benchmarksgame.alioth.debian.org/
 //
 // contributed by the Rust Project Developers
+// contributed by Matt Brubeck
 // contributed by TeXitoi
 
 #![allow(non_snake_case)]
 
-use std::iter::repeat;
 use std::thread;
 
 // As std::simd::f64x2 etc. are unstable, we provide a similar interface,
@@ -64,9 +64,9 @@ fn main() {
 
 fn spectralnorm(n: usize) -> f64 {
     assert!(n % 2 == 0, "only even lengths are accepted");
-    let mut u = repeat(1.0).take(n).collect::<Vec<_>>();
-    let mut v = u.clone();
-    let mut tmp = v.clone();
+    let mut u = vec![1.0; n];
+    let mut v = vec![0.0; n];
+    let mut tmp = vec![0.0; n];
     for _ in 0..10 {
         mult_AtAv(&u, &mut v, &mut tmp);
         mult_AtAv(&v, &mut u, &mut tmp);
