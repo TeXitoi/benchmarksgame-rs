@@ -8,6 +8,8 @@ NUM_CPU ?= num_cpus-1.2.1
 FUTURES_CPUPOOL ?= futures-cpupool-0.1.2
 RAYON ?= rayon-0.6
 ORDERMAP ?= ordermap-0.2.7
+CROSSBEAM ?= crossbeam-0.2
+LIBC ?= libc-0.2
 
 version=$(lastword $(subst -,  , $1))
 crate=$(strip $(subst -$(call version, $1),, $1))
@@ -28,6 +30,7 @@ bin/fasta_redux: lib/$(NUM_CPU).pkg
 bin/k_nucleotide: lib/$(FUTURES_CPUPOOL).pkg lib/$(ORDERMAP).pkg
 bin/mandelbrot: lib/$(RAYON).pkg
 bin/regex_dna: lib/$(REGEX).pkg
+bin/reverse_complement: lib/$(NUM_CPU).pkg lib/$(CROSSBEAM).pkg lib/$(LIBC).pkg
 
 diff/chameneos_redux.diff: out/chameneos_redux.txt ref/chameneos_redux.txt
 	mkdir -p diff
