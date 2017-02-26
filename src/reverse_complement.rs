@@ -5,22 +5,12 @@
 // contributed by Matt Brubeck
 // contributed by TeXitoi
 
-//extern crate libc;
-// exporting needed things from libc for linux x64 (still unstable)
-#[cfg(all(target_os = "linux", any(target_arch = "x86_64", target_arch = "x86")))]
-mod libc {
-    #![allow(non_camel_case_types)]
-    #[repr(u8)]
-    pub enum c_void { __variant1, __variant2 }
-    pub type c_int = i32;
-    #[cfg(target_arch = "x86_64")] pub type size_t = u64;
-    #[cfg(target_arch = "x86")] pub type size_t = u32;
-    extern { pub fn memchr(cx: *const c_void, c: c_int, n: size_t) -> *mut c_void; }
-}
+extern crate crossbeam;
+extern crate num_cpus;
+extern crate libc;
 
 use std::io::{Read, Write};
-use std::ptr::copy;
-use std::thread;
+use std::{cmp, io, mem, ptr, slice};
 use std::fs::File;
 use std::os::unix::io::FromRawFd;
 
@@ -98,7 +88,7 @@ impl<'a> Iterator for MutDnaSeqs<'a> {
     type Item = &'a mut [u8];
 
     fn next(&mut self) -> Option<&'a mut [u8]> {
-        let tmp = std::mem::replace(&mut self.s, &mut []);
+        let tmp = mem::replace(&mut self.s, &mut []);
         let tmp = match memchr(tmp, b'\n') {
             Some(i) => &mut tmp[i + 1 ..],
             None => return None,
@@ -115,6 +105,32 @@ impl<'a> Iterator for MutDnaSeqs<'a> {
     }
 }
 
+/// An iterator that yields chunks from the front of one slice and the back of the other.
+struct DoubleChunk<'a, T: 'a> {
+    n: usize,
+    left: &'a mut [T],
+    right: &'a mut [T],
+}
+fn double_chunk<'a, T>(n: usize, left: &'a mut [T], right: &'a mut [T]) -> DoubleChunk<'a, T> {
+    DoubleChunk { n: n, left: left, right: right }
+}
+impl<'a, T> Iterator for DoubleChunk<'a, T> {
+    type Item = (&'a mut [T], &'a mut [T]);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let len = self.left.len();
+        if len == 0 {
+            return None;
+        }
+        let n = cmp::min(self.n, len);
+        let (x, left)  = mem::replace(&mut self.left,  &mut []).split_at_mut(n);
+        let (right, y) = mem::replace(&mut self.right, &mut []).split_at_mut(len - n);
+        self.left = left;
+        self.right = right;
+        Some((x, y))
+    }
+}
+
 /// Length of a normal line without the terminating \n.
 const LINE_LEN: usize = 60;
 
@@ -122,12 +138,14 @@ const LINE_LEN: usize = 60;
 fn reverse_complement(seq: &mut [u8], tables: &Tables) {
     let len = seq.len() - 1;
     let seq = &mut seq[..len];// Drop the last newline
+
+    // Move newlines so the reversed text is wrapped correctly.
     let off = LINE_LEN - len % (LINE_LEN + 1);
     let mut i = LINE_LEN;
     while i < len {
         unsafe {
-            copy(seq.as_ptr().offset((i - off) as isize),
-                 seq.as_mut_ptr().offset((i - off + 1) as isize), off);
+            ptr::copy(seq.as_ptr().offset((i - off) as isize),
+                      seq.as_mut_ptr().offset((i - off + 1) as isize), off);
             *seq.get_unchecked_mut(i - off) = b'\n';
         }
         i += LINE_LEN + 1;
@@ -136,19 +154,32 @@ fn reverse_complement(seq: &mut [u8], tables: &Tables) {
     let div = len / 4;
     let rem = len % 4;
     unsafe {
-        let mut left = seq.as_mut_ptr() as *mut u16;
+        let p = seq.as_mut_ptr();
+        let xs = slice::from_raw_parts_mut(p as *mut u16, div);
         // This is slow if len % 2 != 0 but still faster than bytewise operations.
-        let mut right = seq.as_mut_ptr().offset(len as isize - 2) as *mut u16;
-        let end = left.offset(div as isize);
-        while left != end {
-            let tmp = tables.cpl16(*left);
-            *left = tables.cpl16(*right);
-            *right = tmp;
-            left = left.offset(1);
-            right = right.offset(-1);
-        }
+        let q = p.offset((div * 2 + rem) as isize);
+        let ys = slice::from_raw_parts_mut(q as *mut u16, div);
 
-        let end = end as *mut u8;
+        let thread_count = num_cpus::get();
+        let chunk_size = (div + thread_count - 1) / thread_count;
+        crossbeam::scope(|scope| {
+            for (a, b) in double_chunk(chunk_size, xs, ys) {
+                scope.spawn(move || {
+                    let mut left = a.as_mut_ptr();
+                    let mut right = b.as_mut_ptr().offset(b.len() as isize - 1);
+                    let end = left.offset(a.len() as isize);
+                    while left != end {
+                        let tmp = tables.cpl16(*left);
+                        *left = tables.cpl16(*right);
+                        *right = tmp;
+                        left = left.offset(1);
+                        right = right.offset(-1);
+                    }
+                });
+            }
+        });
+
+        let end = p.offset(div as isize * 2);
         match rem {
             1 => *end = tables.cpl8(*end),
             2 => {
@@ -167,30 +198,7 @@ fn reverse_complement(seq: &mut [u8], tables: &Tables) {
     }
 }
 
-struct Racy<T>(T);
-unsafe impl<T: 'static> Send for Racy<T> {}
-
-/// Executes a closure in parallel over the given iterator over mutable slice.
-/// The closure `f` is run in parallel with an element of `iter`.
-fn parallel<'a, I, T, F>(iter: I, ref f: F)
-        where T: 'static + Send + Sync,
-              I: Iterator<Item=&'a mut [T]>,
-              F: Fn(&mut [T]) + Sync {
-    let jhs = iter.map(|chunk| {
-        // Need to convert `f` and `chunk` to something that can cross the task
-        // boundary.
-        let f = Racy(f as *const F as *const usize);
-        let raw = Racy((&mut chunk[0] as *mut T, chunk.len()));
-        thread::spawn(move|| {
-            let f = f.0 as *const F;
-            let raw = raw.0;
-            unsafe { (*f)(std::slice::from_raw_parts_mut(raw.0, raw.1)) }
-        })
-    }).collect::<Vec<_>>();
-    for jh in jhs { jh.join().unwrap(); }
-}
-
-fn file_size(f: &mut File) -> std::io::Result<usize> {
+fn file_size(f: &mut File) -> io::Result<usize> {
     Ok(f.metadata()?.len() as usize)
 }
 
@@ -200,7 +208,9 @@ fn main() {
     let mut data = Vec::with_capacity(size + 1);
     stdin.read_to_end(&mut data).unwrap();
     let tables = &Tables::new();
-    parallel(mut_dna_seqs(&mut data), |seq| reverse_complement(seq, tables));
-    let stdout = std::io::stdout();
+    crossbeam::scope(|scope| for seq in mut_dna_seqs(&mut data) {
+        scope.spawn(move || reverse_complement(seq, tables));
+    });
+    let stdout = io::stdout();
     stdout.lock().write_all(&data).unwrap();
 }
