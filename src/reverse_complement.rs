@@ -12,7 +12,6 @@ extern crate libc;
 use std::io::{Read, Write};
 use std::{cmp, io, mem, ptr, slice};
 use std::fs::File;
-use std::os::unix::io::FromRawFd;
 
 struct Tables {
     table8: [u8;1 << 8],
@@ -203,7 +202,7 @@ fn file_size(f: &mut File) -> io::Result<usize> {
 }
 
 fn main() {
-    let mut stdin = unsafe { File::from_raw_fd(0) };
+    let mut stdin = File::open("/dev/stdin").expect("Could not open /dev/stdin");
     let size = file_size(&mut stdin).unwrap_or(1024 * 1024);
     let mut data = Vec::with_capacity(size + 1);
     stdin.read_to_end(&mut data).unwrap();
