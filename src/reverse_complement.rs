@@ -7,7 +7,7 @@
 
 extern crate crossbeam;
 extern crate num_cpus;
-extern crate libc;
+extern crate memchr;
 
 use std::io::{Read, Write};
 use std::{cmp, io, mem, ptr, slice};
@@ -65,19 +65,6 @@ impl Tables {
     }
 }
 
-/// Finds the first position at which `b` occurs in `s`.
-fn memchr(h: &[u8], n: u8) -> Option<usize> {
-    use libc::{c_void, c_int, size_t};
-    let res = unsafe {
-        libc::memchr(h.as_ptr() as *const c_void, n as c_int, h.len() as size_t)
-    };
-    if res.is_null() {
-        None
-    } else {
-        Some(res as usize - h.as_ptr() as usize)
-    }
-}
-
 /// A mutable iterator over DNA sequences
 struct MutDnaSeqs<'a> { s: &'a mut [u8] }
 fn mut_dna_seqs<'a>(s: &'a mut [u8]) -> MutDnaSeqs<'a> {
@@ -88,11 +75,11 @@ impl<'a> Iterator for MutDnaSeqs<'a> {
 
     fn next(&mut self) -> Option<&'a mut [u8]> {
         let tmp = mem::replace(&mut self.s, &mut []);
-        let tmp = match memchr(tmp, b'\n') {
+        let tmp = match memchr::memchr(b'\n', tmp) {
             Some(i) => &mut tmp[i + 1 ..],
             None => return None,
         };
-        let (seq, tmp) = match memchr(tmp, b'>') {
+        let (seq, tmp) = match memchr::memchr(b'>', tmp) {
             Some(i) => tmp.split_at_mut(i),
             None => {
                 let len = tmp.len();
