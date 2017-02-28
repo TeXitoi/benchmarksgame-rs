@@ -139,48 +139,44 @@ fn reverse_complement(seq: &mut [u8], tables: &Tables) {
 
     let div = len / 4;
     let rem = len % 4;
-    unsafe {
-        let p = seq.as_mut_ptr();
-        let xs = slice::from_raw_parts_mut(p as *mut u16, div);
-        // This is slow if len % 2 != 0 but still faster than bytewise operations.
-        let q = p.offset((div * 2 + rem) as isize);
-        let ys = slice::from_raw_parts_mut(q as *mut u16, div);
 
-        let thread_count = num_cpus::get();
-        let chunk_size = (div + thread_count - 1) / thread_count;
-        crossbeam::scope(|scope| {
-            for (a, b) in double_chunk(chunk_size, xs, ys) {
-                scope.spawn(move || {
-                    let mut left = a.as_mut_ptr();
-                    let mut right = b.as_mut_ptr().offset(b.len() as isize - 1);
-                    let end = left.offset(a.len() as isize);
-                    while left != end {
-                        let tmp = tables.cpl16(*left);
-                        *left = tables.cpl16(*right);
-                        *right = tmp;
-                        left = left.offset(1);
-                        right = right.offset(-1);
-                    }
-                });
-            }
-        });
-
-        let end = p.offset(div as isize * 2);
-        match rem {
-            1 => *end = tables.cpl8(*end),
-            2 => {
-                let tmp = tables.cpl8(*end);
-                *end = tables.cpl8(*end.offset(1));
-                *end.offset(1) = tmp;
-            },
-            3 => {
-                *end.offset(1) = tables.cpl8(*end.offset(1));
-                let tmp = tables.cpl8(*end);
-                *end = tables.cpl8(*end.offset(2));
-                *end.offset(2) = tmp;
-            },
-            _ => { },
+    let thread_count = num_cpus::get();
+    let chunk_size = (div + thread_count - 1) / thread_count;
+    crossbeam::scope(|scope| {
+        let (left, right);
+        unsafe {
+            let p = seq.as_mut_ptr();
+            left = slice::from_raw_parts_mut(p as *mut u16, div);
+            // This is slow if len % 2 != 0 but still faster than bytewise operations.
+            let q = p.offset((div * 2 + rem) as isize);
+            right = slice::from_raw_parts_mut(q as *mut u16, div);
+        };
+        for (left, right) in double_chunk(chunk_size, left, right) {
+            scope.spawn(move || {
+                for (left, right) in left.iter_mut().zip(right.iter_mut().rev()) {
+                    let tmp = tables.cpl16(*left);
+                    *left = tables.cpl16(*right);
+                    *right = tmp;
+                }
+            });
         }
+    });
+
+    match rem {
+        0 => {}
+        1 => seq[div * 2] = tables.cpl8(seq[div * 2]),
+        2 => {
+            let tmp = tables.cpl8(seq[div * 2]);
+            seq[div * 2] = tables.cpl8(seq[div * 2 + 1]);
+            seq[div * 2 + 1] = tmp;
+        },
+        3 => {
+            seq[div * 2 + 1] = tables.cpl8(seq[div * 2 + 1]);
+            let tmp = tables.cpl8(seq[div * 2]);
+            seq[div * 2] = tables.cpl8(seq[div * 2 + 2]);
+            seq[div * 2 + 2] = tmp;
+        },
+        _ => unreachable!()
     }
 }
 
