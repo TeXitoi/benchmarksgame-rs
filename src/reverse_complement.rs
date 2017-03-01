@@ -3,14 +3,15 @@
 //
 // contributed by the Rust Project Developers
 // contributed by Matt Brubeck
+// contributed by Cristi Cobzarenco (@cristicbz)
 // contributed by TeXitoi
 
-extern crate crossbeam;
+extern crate rayon;
 extern crate num_cpus;
 extern crate memchr;
 
 use std::io::{Read, Write};
-use std::{cmp, io, mem, ptr, slice};
+use std::{io, ptr, slice};
 use std::fs::File;
 
 struct Tables {
@@ -65,60 +66,42 @@ impl Tables {
     }
 }
 
-/// A mutable iterator over DNA sequences
-struct MutDnaSeqs<'a> { s: &'a mut [u8] }
-fn mut_dna_seqs<'a>(s: &'a mut [u8]) -> MutDnaSeqs<'a> {
-    MutDnaSeqs { s: s }
-}
-impl<'a> Iterator for MutDnaSeqs<'a> {
-    type Item = &'a mut [u8];
-
-    fn next(&mut self) -> Option<&'a mut [u8]> {
-        let tmp = mem::replace(&mut self.s, &mut []);
-        let tmp = match memchr::memchr(b'\n', tmp) {
-            Some(i) => &mut tmp[i + 1 ..],
-            None => return None,
-        };
-        let (seq, tmp) = match memchr::memchr(b'>', tmp) {
-            Some(i) => tmp.split_at_mut(i),
-            None => {
-                let len = tmp.len();
-                tmp.split_at_mut(len)
-            }
-        };
-        self.s = tmp;
-        Some(seq)
-    }
-}
-
-/// An iterator that yields chunks from the front of one slice and the back of the other.
-struct DoubleChunk<'a, T: 'a> {
-    n: usize,
-    left: &'a mut [T],
-    right: &'a mut [T],
-}
-fn double_chunk<'a, T>(n: usize, left: &'a mut [T], right: &'a mut [T]) -> DoubleChunk<'a, T> {
-    DoubleChunk { n: n, left: left, right: right }
-}
-impl<'a, T> Iterator for DoubleChunk<'a, T> {
-    type Item = (&'a mut [T], &'a mut [T]);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let len = self.left.len();
-        if len == 0 {
-            return None;
-        }
-        let n = cmp::min(self.n, len);
-        let (x, left)  = mem::replace(&mut self.left,  &mut []).split_at_mut(n);
-        let (right, y) = mem::replace(&mut self.right, &mut []).split_at_mut(len - n);
-        self.left = left;
-        self.right = right;
-        Some((x, y))
-    }
-}
-
 /// Length of a normal line without the terminating \n.
 const LINE_LEN: usize = 60;
+const SEQUENTIAL_SIZE: usize = 1024;
+
+/// Compute the reverse complement with the sequence split into two equal-sized slices.
+fn reverse_complement_left_right(left: &mut [u16], right: &mut [u16], tables: &Tables) {
+    let len = left.len();
+    if len <= SEQUENTIAL_SIZE {
+        assert_eq!(right.len(), len);
+        for (left, right) in left.iter_mut().zip(right.iter_mut().rev()) {
+            let tmp = tables.cpl16(*left);
+            *left = tables.cpl16(*right);
+            *right = tmp;
+        }
+    } else {
+        let (left1, left2) = left.split_at_mut((len + 1) / 2);
+        let (right2, right1) = right.split_at_mut(len / 2);
+        rayon::join(|| reverse_complement_left_right(left1, right1, tables),
+                    || reverse_complement_left_right(left2, right2, tables));
+    }
+}
+
+/// Split a byte slice into two u16-halves with any remainder left in the middle.
+fn split_mut_middle_as_u16<'a>(seq: &'a mut [u8]) -> (&'a mut [u16], &'a mut [u8], &'a mut [u16]) {
+    let len = seq.len();
+    let div = len / 4;
+    let rem = len % 4;
+    unsafe {
+        let left_ptr = seq.as_mut_ptr();
+        // This is slow if len % 2 != 0 but still faster than bytewise operations.
+        let right_ptr = left_ptr.offset((div * 2 + rem) as isize);
+        (slice::from_raw_parts_mut(left_ptr as *mut u16, div),
+        slice::from_raw_parts_mut(left_ptr.offset((div * 2) as isize), rem),
+        slice::from_raw_parts_mut(right_ptr as *mut u16, div))
+    }
+}
 
 /// Compute the reverse complement.
 fn reverse_complement(seq: &mut [u8], tables: &Tables) {
@@ -136,45 +119,22 @@ fn reverse_complement(seq: &mut [u8], tables: &Tables) {
         }
         i += LINE_LEN + 1;
     }
+    let (left, middle, right) = split_mut_middle_as_u16(seq);
+    reverse_complement_left_right(left, right, tables);
 
-    let div = len / 4;
-    let rem = len % 4;
-
-    let thread_count = num_cpus::get();
-    let chunk_size = (div + thread_count - 1) / thread_count;
-    crossbeam::scope(|scope| {
-        let (left, right);
-        unsafe {
-            let p = seq.as_mut_ptr();
-            left = slice::from_raw_parts_mut(p as *mut u16, div);
-            // This is slow if len % 2 != 0 but still faster than bytewise operations.
-            let q = p.offset((div * 2 + rem) as isize);
-            right = slice::from_raw_parts_mut(q as *mut u16, div);
-        };
-        for (left, right) in double_chunk(chunk_size, left, right) {
-            scope.spawn(move || {
-                for (left, right) in left.iter_mut().zip(right.iter_mut().rev()) {
-                    let tmp = tables.cpl16(*left);
-                    *left = tables.cpl16(*right);
-                    *right = tmp;
-                }
-            });
-        }
-    });
-
-    match rem {
+    match middle.len() {
         0 => {}
-        1 => seq[div * 2] = tables.cpl8(seq[div * 2]),
+        1 => middle[0] = tables.cpl8(middle[0]),
         2 => {
-            let tmp = tables.cpl8(seq[div * 2]);
-            seq[div * 2] = tables.cpl8(seq[div * 2 + 1]);
-            seq[div * 2 + 1] = tmp;
+            let tmp = tables.cpl8(middle[0]);
+            middle[0] = tables.cpl8(middle[1]);
+            middle[1] = tmp;
         },
         3 => {
-            seq[div * 2 + 1] = tables.cpl8(seq[div * 2 + 1]);
-            let tmp = tables.cpl8(seq[div * 2]);
-            seq[div * 2] = tables.cpl8(seq[div * 2 + 2]);
-            seq[div * 2 + 2] = tmp;
+            middle[1] = tables.cpl8(middle[1]);
+            let tmp = tables.cpl8(middle[0]);
+            middle[0] = tables.cpl8(middle[2]);
+            middle[2] = tmp;
         },
         _ => unreachable!()
     }
@@ -184,15 +144,30 @@ fn file_size(f: &mut File) -> io::Result<usize> {
     Ok(f.metadata()?.len() as usize)
 }
 
+fn split_and_reverse<'a>(data: &mut [u8], tables: &Tables) {
+    let data = match memchr::memchr(b'\n', data) {
+        Some(i) => &mut data[i + 1..],
+        None => return,
+    };
+
+    match memchr::memchr(b'>', data) {
+        Some(i) => {
+            let (head, tail) = data.split_at_mut(i);
+            rayon::join(|| reverse_complement(head, tables),
+                        || split_and_reverse(tail, tables));
+        }
+        None => reverse_complement(data, tables),
+    };
+}
+
 fn main() {
     let mut stdin = File::open("/dev/stdin").expect("Could not open /dev/stdin");
     let size = file_size(&mut stdin).unwrap_or(1024 * 1024);
     let mut data = Vec::with_capacity(size + 1);
     stdin.read_to_end(&mut data).unwrap();
     let tables = &Tables::new();
-    crossbeam::scope(|scope| for seq in mut_dna_seqs(&mut data) {
-        scope.spawn(move || reverse_complement(seq, tables));
-    });
+
+    split_and_reverse(&mut data, tables);
     let stdout = io::stdout();
     stdout.lock().write_all(&data).unwrap();
 }
