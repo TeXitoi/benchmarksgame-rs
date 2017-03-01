@@ -30,7 +30,7 @@ bin/fasta_redux: lib/$(NUM_CPU).pkg
 bin/k_nucleotide: lib/$(FUTURES_CPUPOOL).pkg lib/$(ORDERMAP).pkg
 bin/mandelbrot: lib/$(RAYON).pkg
 bin/regex_dna: lib/$(REGEX).pkg
-bin/reverse_complement: lib/$(NUM_CPU).pkg lib/$(CROSSBEAM).pkg lib/$(MEMCHR).pkg
+bin/reverse_complement: lib/$(RAYON).pkg lib/$(MEMCHR).pkg
 
 diff/chameneos_redux.diff: out/chameneos_redux.txt ref/chameneos_redux.txt
 	mkdir -p diff
