@@ -6,9 +6,10 @@
 // contributed by TeXitoi
 
 extern crate typed_arena;
+extern crate rayon;
 
-use std::thread;
 use typed_arena::Arena;
+use rayon::prelude::*;
 
 struct Tree<'a> {
     l: Option<&'a Tree<'a>>,
@@ -38,13 +39,12 @@ fn bottom_up_tree<'r>(arena: &'r Arena<Tree<'r>>, item: i32, depth: i32)
 }
 
 fn inner(depth: i32, iterations: i32) -> String {
-    let mut chk = 0;
-    for i in 1 .. iterations + 1 {
+    let chk = (1 .. iterations + 1).into_par_iter().map(|i| {
         let arena = Arena::new();
         let a = bottom_up_tree(&arena, i, depth);
         let b = bottom_up_tree(&arena, -i, depth);
-        chk += item_check(a) + item_check(b);
-    }
+        item_check(a) + item_check(b)
+    }).sum();
     format!("{}\t trees of depth {}\t check: {}",
             iterations * 2, depth, chk)
 }
@@ -69,13 +69,17 @@ fn main() {
     let long_lived_arena = Arena::new();
     let long_lived_tree = bottom_up_tree(&long_lived_arena, 0, max_depth);
 
-    let messages = (min_depth..max_depth + 1).filter(|&d| d % 2 == 0).map(|depth| {
-        let iterations = 1 << ((max_depth - depth + min_depth) as u32);
-        thread::spawn(move || inner(depth, iterations))
-    }).collect::<Vec<_>>();
+    let messages = (min_depth/2..max_depth/2 + 1)
+            .into_par_iter()
+            .weight_max()
+            .map(|half_depth| {
+                let depth = half_depth * 2;
+                let iterations = 1 << ((max_depth - depth + min_depth) as u32);
+                inner(depth, iterations)
+            }).collect::<Vec<_>>();
 
     for message in messages.into_iter() {
-        println!("{}", message.join().unwrap());
+        println!("{}", message);
     }
 
     println!("long lived tree of depth {}\t check: {}",
