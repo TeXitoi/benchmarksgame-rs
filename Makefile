@@ -24,7 +24,7 @@ clean:
 distclean: clean
 	rm -fr bin out tmp lib
 
-bin/binary_trees: lib/$(ARENA).pkg
+bin/binary_trees: lib/$(ARENA).pkg lib/$(RAYON).pkg
 bin/fasta: lib/$(NUM_CPU).pkg
 bin/fasta_redux: lib/$(NUM_CPU).pkg
 bin/k_nucleotide: lib/$(FUTURES_CPUPOOL).pkg lib/$(ORDERMAP).pkg
