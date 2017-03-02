@@ -13,26 +13,42 @@ use typed_arena::Arena;
 use rayon::prelude::*;
 
 struct Tree<'a> {
-    l: Option<&'a Tree<'a>>,
-    r: Option<&'a Tree<'a>>,
-    i: i32,
+    children: Option<(&'a Tree<'a>, &'a Tree<'a>)>,
+    item: i32,
 }
 
-fn item_check(t: Option<&Tree>) -> i32 {
-    match t {
-        None => 0,
-        Some(&Tree { l: None, r: None, i }) => i,
-        Some(&Tree { l, r, i }) => i + item_check(l) - item_check(r)
+fn item_check(tree: &Tree) -> i32 {
+    // This mutually tail recursive definition is significantly more efficient than the non-tail
+    // recursive one.
+    fn plus(sum: i32, tree: &Tree) -> i32 {
+        if let Some((left, right)) = tree.children {
+            minus(plus(sum + tree.item, left), right)
+        } else {
+            sum + tree.item
+        }
+    }
+    fn minus(sum: i32, tree: &Tree) -> i32 {
+        if let Some((left, right)) = tree.children {
+            plus(minus(sum - tree.item, left), right)
+        } else {
+            sum - tree.item
+        }
+    }
+    if let Some((left, right)) = tree.children {
+        minus(plus(tree.item, left), right)
+    } else {
+        tree.item
     }
 }
 
-fn bottom_up_tree<'r>(arena: &'r Arena<Tree<'r>>, i: i32, depth: i32) -> Option<&'r Tree<'r>> {
-    let (l, r) = if depth > 0 {
-        (bottom_up_tree(arena, 2 * i - 1, depth - 1), bottom_up_tree(arena, 2 * i, depth - 1))
-    } else {
-        (None, None)
-    };
-    Some(arena.alloc(Tree { l: l, r: r, i: i }))
+fn bottom_up_tree<'r>(arena: &'r Arena<Tree<'r>>, item: i32, depth: i32)
+                  -> &'r Tree<'r> {
+    let mut tree = arena.alloc(Tree { children: None, item: item });
+    if depth > 0 {
+        tree.children = Some((bottom_up_tree(arena, 2 * item - 1, depth - 1),
+                              bottom_up_tree(arena, 2 * item, depth - 1)))
+    }
+    tree
 }
 
 fn inner(depth: i32, iterations: i32) -> String {
@@ -62,7 +78,7 @@ fn main() {
     let long_lived_arena = Arena::new();
     let long_lived_tree = bottom_up_tree(&long_lived_arena, 0, max_depth);
 
-    let messages = (min_depth/2..max_depth/2 + 1).into_par_iter().weight_max().map(|half_depth| {
+    let messages = (min_depth/2..max_depth/2 + 1).into_par_iter().map(|half_depth| {
             let depth = half_depth * 2;
             let iterations = 1 << ((max_depth - depth + min_depth) as u32);
             inner(depth, iterations)
