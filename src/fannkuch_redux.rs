@@ -3,146 +3,97 @@
 //
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
+// contributed by Cristi Cobzarenco (@cristicbz)
+
+extern crate rayon;
 
 use std::{cmp, mem};
-use std::thread;
+use rayon::prelude::*;
 
-fn rotate(x: &mut [i32]) {
-    let mut prev = x[0];
-    for place in x.iter_mut().rev() {
-        prev = mem::replace(place, prev)
-    }
-}
-
-fn next_permutation(perm: &mut [i32], count: &mut [i32]) {
-    for i in 1..perm.len() {
-        rotate(&mut perm[.. i + 1]);
-        let count_i = &mut count[i];
-        if *count_i >= i as i32 {
-            *count_i = 0;
-        } else {
-            *count_i += 1;
-            break
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-struct P {
-    p: [i32; 16],
-}
-
-#[derive(Clone, Copy)]
-struct Perm {
-    cnt: [i32; 16],
-    fact: [u32; 16],
-    n: u32,
-    permcount: u32,
-    perm: P,
-}
-
-impl Perm {
-    fn new(n: u32) -> Perm {
-        let mut fact = [1; 16];
-        for i in 1 .. n as usize + 1 {
-            fact[i] = fact[i - 1] * i as u32;
-        }
-        Perm {
-            cnt: [0; 16],
-            fact: fact,
-            n: n,
-            permcount: 0,
-            perm: P { p: [0; 16 ] }
-        }
-    }
-
-    fn get(&mut self, mut idx: i32) -> P {
-        let mut pp = [0u8; 16];
-        self.permcount = idx as u32;
-        for (i, place) in self.perm.p.iter_mut().enumerate() {
-            *place = i as i32 + 1;
-        }
-
-        for i in (1 .. self.n as usize).rev() {
-            let d = idx / self.fact[i] as i32;
-            self.cnt[i] = d;
-            idx %= self.fact[i] as i32;
-            for (place, val) in pp.iter_mut().zip(self.perm.p[..(i+1)].iter()) {
-                *place = (*val) as u8
-            }
-
-            let d = d as usize;
-            for j in 0 .. i + 1 {
-                self.perm.p[j] = if j + d <= i {pp[j + d]} else {pp[j+d-i-1]} as i32;
-            }
-        }
-
-        self.perm
-    }
-
-    fn count(&self) -> u32 { self.permcount }
-    fn max(&self) -> u32 { self.fact[self.n as usize] }
-
-    fn next(&mut self) -> P {
-        next_permutation(&mut self.perm.p, &mut self.cnt);
-        self.permcount += 1;
-
-        self.perm
-    }
-}
-
-
-fn reverse(tperm: &mut [i32], k: usize) {
-    tperm[..k].reverse()
-}
-
-fn work(mut perm: Perm, n: usize, max: usize) -> (i32, i32) {
-    let mut checksum = 0;
-    let mut maxflips = 0;
-
-    let mut p = perm.get(n as i32);
-
-    while perm.count() < max as u32 {
-        let mut flips = 0;
-
-        while p.p[0] != 1 {
-            let k = p.p[0] as usize;
-            reverse(&mut p.p, k);
-            flips += 1;
-        }
-
-        checksum += if perm.count() % 2 == 0 {flips} else {-flips};
-        maxflips = cmp::max(maxflips, flips);
-
-        p = perm.next();
-    }
-
-    (checksum, maxflips)
-}
+const NUM_BLOCKS: u32 = 24;
 
 fn fannkuch(n: i32) -> (i32, i32) {
-    let perm = Perm::new(n as u32);
-
-    let n = 4;
-    let mut futures = vec![];
-    let k = perm.max() / n;
-
-    for j in (0..).map(|x| x * k).take_while(|&j| j < k * n) {
-        let max = cmp::min(j+k, perm.max());
-
-        futures.push(thread::spawn(move|| {
-            work(perm, j as usize, max as usize)
-        }))
+    let mut factorials = [1; 16];
+    for i in 1 .. n as usize + 1 {
+        factorials[i] = factorials[i - 1] * i as u32;
     }
 
-    let mut checksum = 0;
-    let mut maxflips = 0;
-    for fut in futures.into_iter() {
-        let (cs, mf) = fut.join().unwrap();
-        checksum += cs;
-        maxflips = cmp::max(maxflips, mf);
-    }
-    (checksum, maxflips)
+    let perm_max = factorials[n as usize];
+    let (num_blocks, block_size) = if perm_max < NUM_BLOCKS {
+        (1, perm_max)
+    } else {
+        (NUM_BLOCKS + if perm_max % NUM_BLOCKS == 0 { 0 } else { 1 },
+         perm_max / NUM_BLOCKS)
+    };
+
+    (0..num_blocks).into_par_iter().map(|i_block| i_block * block_size).map(|initial| {
+        let mut count = [0i32; 16];
+        let mut temp = [0i32; 16];
+        let mut current = [0i32; 16];
+        for (i, value) in current.iter_mut().enumerate() {
+            *value = i as i32;
+        }
+
+        let mut permutation_index = initial as i32;
+        for i in (1..n as usize).rev() {
+            let factorial = factorials[i] as i32;
+            let d = permutation_index / factorial;
+            permutation_index %= factorial;
+            count[i] = d;
+
+            temp.copy_from_slice(&current);
+            let d = d as usize;
+            for j in 0..i + 1 {
+                current[j] = if j + d <= i { temp[j + d] } else { temp[j + d - i - 1] };
+            }
+        }
+
+        let last_permutation_in_block = cmp::min(initial + block_size, perm_max) - 1;
+        let mut permutation_index = initial;
+        let (mut checksum, mut maxflips) = (0, 0);
+        loop {
+            if current[0] > 0 {
+                let mut flip_count = 1;
+                temp.copy_from_slice(&current);
+
+                let mut first_value = current[0] as usize;
+                while temp[first_value] != 0 {
+                    let new_first_value = mem::replace(&mut temp[first_value], first_value as i32);
+                    if first_value > 2 {
+                        temp[1..first_value].reverse();
+                    }
+                    first_value = new_first_value as usize;
+                    flip_count += 1;
+                }
+
+                checksum += if permutation_index % 2 == 0 { flip_count } else { -flip_count };
+                maxflips = cmp::max(maxflips, flip_count);
+            }
+
+            if permutation_index >= last_permutation_in_block {
+                break;
+            }
+            permutation_index += 1;
+
+            let mut first_value = current[1];
+            current[1] = current[0];
+            current[0] = first_value;
+            let mut i = 1;
+            while count[i] >= i as i32 {
+                count[i] = 0;
+                i += 1;
+                let new_first_value = current[1];
+                current[0] = new_first_value;
+                for j in 1..i {
+                    current[j] = current[j + 1];
+                }
+                current[i] = mem::replace(&mut first_value, new_first_value);
+            }
+            count[i] += 1;
+        }
+
+        (checksum, maxflips)
+    }).reduce(|| (0, 0), |(cs1, mf1), (cs2, mf2)| (cs1 + cs2, cmp::max(mf1, mf2)))
 }
 
 fn main() {
