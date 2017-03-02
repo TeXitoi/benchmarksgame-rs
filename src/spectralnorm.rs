@@ -6,8 +6,9 @@
 // contributed by TeXitoi
 
 #![allow(non_snake_case)]
+extern crate rayon;
 
-use std::thread;
+use rayon::prelude::*;
 
 // As std::simd::f64x2 etc. are unstable, we provide a similar interface,
 // expecting llvm to autovectorize its usage.
@@ -75,16 +76,9 @@ fn spectralnorm(n: usize) -> f64 {
 }
 
 fn mult_AtAv(v: &[f64], out: &mut [f64], tmp: &mut [f64]) {
-    mult_Av(v, tmp);
-    mult_Atv(tmp, out);
-}
-
-fn mult_Av(v: &[f64], out: &mut [f64]) {
-    parallel(out, |start, out| mult(v, out, start, Ax2));
-}
-
-fn mult_Atv(v: &[f64], out: &mut [f64]) {
-    parallel(out, |start, out| mult(v, out, start, |i, j| Ax2(j, i)));
+    let size = v.len() / 4 + 1;
+    tmp.par_chunks_mut(size).enumerate().for_each(|start, out| mult(v, tmp, start, Ax2));
+    out.par_chunks_mut(size).enumerate().for_each(|start, out| mult(tmp, out, start, |i, j| Ax2(j, i)));
 }
 
 fn mult<F>(v: &[f64], out: &mut [f64], start: usize, a: F)
@@ -107,28 +101,4 @@ fn Ax2(i: usizex2, j: usizex2) -> f64x2 {
 
 fn dot(v: &[f64], u: &[f64]) -> f64 {
     v.iter().zip(u.iter()).map(|(a, b)| *a * *b).fold(0., |acc, i| acc + i)
-}
-
-struct Racy<T>(T);
-unsafe impl<T: 'static> Send for Racy<T> {}
-
-// Executes a closure in parallel over the given mutable slice. The closure `f`
-// is run in parallel and yielded the starting index within `v` as well as a
-// sub-slice of `v`.
-fn parallel<'a, T, F>(v: &mut [T], ref f: F)
-    where T: 'static + Send + Sync,
-          F: Fn(usize, &mut [T]) + Sync {
-    let size = v.len() / 4 + 1;
-    let jhs = v.chunks_mut(size).enumerate().map(|(i, chunk)| {
-        // Need to convert `f` and `chunk` to something that can cross the task
-        // boundary.
-        let f = Racy(f as *const F as *const usize);
-        let raw = Racy((&mut chunk[0] as *mut T, chunk.len()));
-        thread::spawn(move|| {
-            let f = f.0 as *const F;
-            let raw = raw.0;
-            unsafe { (*f)(i * size, std::slice::from_raw_parts_mut(raw.0, raw.1)) }
-        })
-    }).collect::<Vec<_>>();
-    for jh in jhs { jh.join().unwrap(); }
 }
