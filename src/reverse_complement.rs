@@ -7,7 +7,6 @@
 // contributed by TeXitoi
 
 extern crate rayon;
-extern crate num_cpus;
 extern crate memchr;
 
 use std::io::{Read, Write};
