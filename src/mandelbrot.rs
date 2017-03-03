@@ -90,7 +90,6 @@ impl Mandelbrot8 {
         self.to_byte()
     }
 
-    #[inline]
     fn advance(&mut self, iterations: usize) {
         for _ in 0..iterations {
             self.zi = (self.zr + self.zr) * self.zi + self.ci;
