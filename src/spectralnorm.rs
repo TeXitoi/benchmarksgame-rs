@@ -77,8 +77,18 @@ fn spectralnorm(n: usize) -> f64 {
 
 fn mult_AtAv(v: &[f64], out: &mut [f64], tmp: &mut [f64]) {
     let size = v.len() / 4 + 1;
-    tmp.par_chunks_mut(size).enumerate().for_each(|start, out| mult(v, tmp, start, Ax2));
-    out.par_chunks_mut(size).enumerate().for_each(|start, out| mult(tmp, out, start, |i, j| Ax2(j, i)));
+    mult_Av(v, tmp, size);
+    mult_Atv(tmp, out, size);
+}
+
+fn mult_Av(v: &[f64], out: &mut [f64], size: usize) {
+    out.par_chunks_mut(size).enumerate().for_each(
+        |(start, out)| mult(v, out, start, |i, j| Ax2(j, i)));
+}
+
+fn mult_Atv(v: &[f64], out: &mut [f64], size: usize) {
+    out.par_chunks_mut(size).enumerate().for_each(
+        |(start, out)| mult(v, out, start, Ax2));
 }
 
 fn mult<F>(v: &[f64], out: &mut [f64], start: usize, a: F)
