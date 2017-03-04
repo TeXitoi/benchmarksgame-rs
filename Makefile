@@ -30,6 +30,7 @@ bin/k_nucleotide: lib/$(FUTURES_CPUPOOL).pkg lib/$(ORDERMAP).pkg
 bin/mandelbrot: lib/$(RAYON).pkg
 bin/regex_redux: lib/$(REGEX).pkg
 bin/reverse_complement: lib/$(RAYON).pkg
+bin/spectralnorm: lib/$(RAYON).pkg
 
 diff/chameneos_redux.diff: out/chameneos_redux.txt ref/chameneos_redux.txt
 	mkdir -p diff
