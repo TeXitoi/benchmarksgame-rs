@@ -18,14 +18,11 @@ struct Tree<'a> {
 }
 
 fn item_check(tree: &Tree) -> i32 {
-    fn check(sum: i32, tree: &Tree) -> i32 {
-        if let Some((left, right)) = tree.children {
-            check(sum + tree.item - item_check(right), left)
-        } else {
-            sum + tree.item
-        }
+    if let Some((left, right)) = tree.children {
+        tree.item - item_check(right) + item_check(left)
+    } else {
+        tree.item
     }
-    check(0, tree)
 }
 
 fn bottom_up_tree<'r>(arena: &'r Arena<Tree<'r>>, item: i32, depth: i32)
