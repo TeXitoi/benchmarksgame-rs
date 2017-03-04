@@ -3,8 +3,8 @@
 //
 // contributed by the Rust Project Developers
 // contributed by Matt Brubeck
-// contributed by Cristi Cobzarenco (@cristicbz)
 // contributed by TeXitoi
+// contributed by Cristi Cobzarenco (@cristicbz)
 
 extern crate typed_arena;
 extern crate rayon;
@@ -18,35 +18,23 @@ struct Tree<'a> {
 }
 
 fn item_check(tree: &Tree) -> i32 {
-    // This mutually tail recursive definition is significantly more efficient than the non-tail
-    // recursive one.
-    fn plus(sum: i32, tree: &Tree) -> i32 {
+    fn check(sum: i32, tree: &Tree) -> i32 {
         if let Some((left, right)) = tree.children {
-            minus(plus(sum + tree.item, left), right)
+            check(sum + tree.item - item_check(right), left)
         } else {
             sum + tree.item
         }
     }
-    fn minus(sum: i32, tree: &Tree) -> i32 {
-        if let Some((left, right)) = tree.children {
-            plus(minus(sum - tree.item, left), right)
-        } else {
-            sum - tree.item
-        }
-    }
-    if let Some((left, right)) = tree.children {
-        minus(plus(tree.item, left), right)
-    } else {
-        tree.item
-    }
+    check(0, tree)
 }
 
 fn bottom_up_tree<'r>(arena: &'r Arena<Tree<'r>>, item: i32, depth: i32)
                   -> &'r Tree<'r> {
     let mut tree = arena.alloc(Tree { children: None, item: item });
     if depth > 0 {
-        tree.children = Some((bottom_up_tree(arena, 2 * item - 1, depth - 1),
-                              bottom_up_tree(arena, 2 * item, depth - 1)))
+        let right = bottom_up_tree(arena, 2 * item, depth - 1);
+        let left = bottom_up_tree(arena, 2 * item - 1, depth - 1);
+        tree.children = Some((left, right))
     }
     tree
 }
