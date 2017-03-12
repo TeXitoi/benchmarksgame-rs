@@ -32,14 +32,14 @@ struct MyRandom {
 
 impl MyRandom {
     fn new(count: usize, thread_count: u16) -> MyRandom {
-        MyRandom { 
+        MyRandom {
             last: 42,
             count: count,
             thread_count: thread_count,
             next_thread_num: 0
         }
     }
-    
+
     fn normalize(p: f32) -> u32 {(p * IM as f32).floor() as u32}
 
     fn reset(&mut self, count: usize) {
@@ -73,8 +73,8 @@ impl MyStdOut {
         MyStdOut {
             thread_count: thread_count,
             next_thread_num: 0,
-            stdout: io::stdout() 
-        } 
+            stdout: io::stdout()
+        }
     }
     fn write(&mut self, data: &[u8], cur_thread: u16) -> io::Result<()> {
         if self.next_thread_num != cur_thread {
@@ -107,7 +107,7 @@ fn make_fasta2<I: Iterator<Item=u8>>(header: &str, mut it: I, mut n: usize)
     let mut line = [0u8; LINE_LENGTH + 1];
     while n > 0 {
         let nb = min(LINE_LENGTH, n);
-        for i in (0..nb) {
+        for i in 0..nb {
             line[i] = it.next().unwrap();
         }
         n -= nb;
@@ -119,7 +119,6 @@ fn make_fasta2<I: Iterator<Item=u8>>(header: &str, mut it: I, mut n: usize)
 
 fn do_fasta(thread_num: u16, rng: Arc<Mutex<MyRandom>>,
             wr: Arc<Mutex<MyStdOut>>, data: Vec<(u32, u8)>) {
-    
     let mut rng_buf = [0u32; BLKLEN];
     let mut out_buf = [0u8; BLKLEN + LINES];
     let mut count;
@@ -139,7 +138,7 @@ fn do_fasta(thread_num: u16, rng: Arc<Mutex<MyRandom>>,
             if i % LINE_LENGTH == 0 && i > 0 {
                 out_buf[i+line_count] = b'\n';
                 line_count += 1;
-            } 
+            }
             let rn = rng_buf[i];
             for j in &data {
                 if j.0 >= rn {
@@ -182,7 +181,7 @@ fn main() {
         .and_then(|s| s.into_string().ok())
         .and_then(|n| n.parse().ok())
         .unwrap_or(1000);
-    
+
     let num_threads: u16 = num_cpus::get() as u16;
 
     let rng = Arc::new(Mutex::new(MyRandom::new(n*3, num_threads)));
