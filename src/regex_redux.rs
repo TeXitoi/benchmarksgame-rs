@@ -1,9 +1,10 @@
 // The Computer Language Benchmarks Game
 // http://benchmarksgame.alioth.debian.org/
 //
-// contributed by the Rust Project Developers
+// regex-dna program contributed by the Rust Project Developers
 // contributed by BurntSushi
 // contributed by TeXitoi
+// converted from regex-dna program
 
 extern crate regex;
 
@@ -42,17 +43,11 @@ fn main() {
     }
 
     let substs = vec![
-        (regex!("B"), &b"(c|g|t)"[..]),
-        (regex!("D"), &b"(a|g|t)"[..]),
-        (regex!("H"), &b"(a|c|t)"[..]),
-        (regex!("K"), &b"(g|t)"[..]),
-        (regex!("M"), &b"(a|c)"[..]),
-        (regex!("N"), &b"(a|c|g|t)"[..]),
-        (regex!("R"), &b"(a|g)"[..]),
-        (regex!("S"), &b"(c|g)"[..]),
-        (regex!("V"), &b"(a|c|g)"[..]),
-        (regex!("W"), &b"(a|t)"[..]),
-        (regex!("Y"), &b"(c|t)"[..]),
+        (regex!("tHa[Nt]"), &b"<4>"[..]),
+        (regex!("aND|caN|Ha[DS]|WaS"), &b"<3>"[..]),
+        (regex!("a[NSt]|BY"), &b"<2>"[..]),
+        (regex!("<[^>]*>"), &b"|"[..]),
+        (regex!("[^|][^|]*"), &b""[..]),
     ];
     let mut seq = seq;
     for (re, replacement) in substs.into_iter() {
