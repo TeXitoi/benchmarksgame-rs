@@ -10,15 +10,26 @@
 extern crate regex;
 
 use std::borrow::Cow;
+use std::fs::File;
 use std::io::{self, Read};
 use std::sync::Arc;
 use std::thread;
 
 macro_rules! regex { ($re:expr) => { ::regex::bytes::Regex::new($re).unwrap() } }
 
+/// Read the input into memory.
+fn read() -> io::Result<Vec<u8>> {
+    // Pre-allocate a buffer based on the input file size.
+    let mut stdin = File::open("/dev/stdin")?;
+    let size = stdin.metadata()?.len() as usize;
+    let mut buf = Vec::with_capacity(size + 1);
+
+    stdin.read_to_end(&mut buf)?;
+    Ok(buf)
+}
+
 fn main() {
-    let mut seq = Vec::with_capacity(51 * (1 << 20));
-    io::stdin().read_to_end(&mut seq).unwrap();
+    let mut seq = read().unwrap();
     let ilen = seq.len();
 
     // Remove headers and newlines.
