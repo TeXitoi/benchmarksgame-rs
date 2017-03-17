@@ -63,7 +63,7 @@ fn main() {
     let mut seq = Cow::Borrowed(&seq_arc[..]);
 
     // Perform the replacements in sequence:
-    for (re, replacement) in substs.into_iter() {
+    for (re, replacement) in substs {
         seq = Cow::Owned(re.replace_all(&seq, replacement).into_owned());
     }
 
