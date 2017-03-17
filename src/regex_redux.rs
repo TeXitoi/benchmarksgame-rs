@@ -19,10 +19,11 @@ fn main() {
     io::stdin().read_to_end(&mut seq).unwrap();
     let ilen = seq.len();
 
+    // Remove headers and newlines.
     seq = regex!(">[^\n]*\n|\n").replace_all(&seq, &b""[..]).into_owned();
     let clen = seq.len();
-    let seq_arc = Arc::new(seq.clone());
 
+    // Search for occurrences of the following patterns:
     let variants = vec![
         regex!("agggtaaa|tttaccct"),
         regex!("[cgt]gggtaaa|tttaccc[acg]"),
@@ -34,6 +35,10 @@ fn main() {
         regex!("agggta[cgt]a|t[acg]taccct"),
         regex!("agggtaa[cgt]|[acg]ttaccct"),
     ];
+
+    // Count each pattern in parallel.  Use an Arc (atomic reference-counted
+    // pointer) to share the sequence between threads without copying it.
+    let seq_arc = Arc::new(seq.clone());
     let mut counts = vec![];
     for variant in variants {
         let seq = seq_arc.clone();
@@ -42,6 +47,7 @@ fn main() {
         counts.push((restr, future));
     }
 
+    // Replace the following patterns, one at a time:
     let substs = vec![
         (regex!("tHa[Nt]"), &b"<4>"[..]),
         (regex!("aND|caN|Ha[DS]|WaS"), &b"<3>"[..]),
@@ -49,11 +55,14 @@ fn main() {
         (regex!("<[^>]*>"), &b"|"[..]),
         (regex!("[^|][^|]*"), &b""[..]),
     ];
+
     let mut seq = seq;
+    // Perform the replacements in sequence:
     for (re, replacement) in substs.into_iter() {
         seq = re.replace_all(&seq, replacement).into_owned();
     }
 
+    // Print the results:
     for (variant, count) in counts {
         println!("{} {}", variant, count.join().unwrap());
     }
