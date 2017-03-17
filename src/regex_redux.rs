@@ -5,9 +5,11 @@
 // contributed by BurntSushi
 // contributed by TeXitoi
 // converted from regex-dna program
+// contributed by Matt Brubeck
 
 extern crate regex;
 
+use std::borrow::Cow;
 use std::io::{self, Read};
 use std::sync::Arc;
 use std::thread;
@@ -38,7 +40,7 @@ fn main() {
 
     // Count each pattern in parallel.  Use an Arc (atomic reference-counted
     // pointer) to share the sequence between threads without copying it.
-    let seq_arc = Arc::new(seq.clone());
+    let seq_arc = Arc::new(seq);
     let mut counts = vec![];
     for variant in variants {
         let seq = seq_arc.clone();
@@ -56,10 +58,13 @@ fn main() {
         (regex!("[^|][^|]*"), &b""[..]),
     ];
 
-    let mut seq = seq;
+    // Use Cow here to avoid one extra copy of the sequence, by borrowing from
+    // the Arc during the first iteration.
+    let mut seq = Cow::Borrowed(&seq_arc[..]);
+
     // Perform the replacements in sequence:
     for (re, replacement) in substs.into_iter() {
-        seq = re.replace_all(&seq, replacement).into_owned();
+        seq = Cow::Owned(re.replace_all(&seq, replacement).into_owned());
     }
 
     // Print the results:
