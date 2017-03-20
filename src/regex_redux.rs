@@ -66,7 +66,7 @@ fn main() {
         (regex!("aND|caN|Ha[DS]|WaS"), &b"<3>"[..]),
         (regex!("a[NSt]|BY"), &b"<2>"[..]),
         (regex!("<[^>]*>"), &b"|"[..]),
-        (regex!("[^|][^|]*"), &b""[..]),
+        (regex!("\\|[^|][^|]*\\|"), &b"-"[..]),
     ];
 
     // Use Cow here to avoid one extra copy of the sequence, by borrowing from
