@@ -5,7 +5,6 @@
 // contributed by Matt Brubeck
 // contributed by TeXitoi
 // contributed by Cristi Cobzarenco
-// *reset*
 
 extern crate typed_arena;
 extern crate rayon;
@@ -37,7 +36,7 @@ fn bottom_up_tree<'r>(arena: &'r Arena<Tree<'r>>, depth: i32)
 }
 
 fn inner(depth: i32, iterations: i32) -> String {
-    let chk = (1 .. iterations + 1).into_par_iter().map(|i| {
+    let chk = (0 .. iterations).into_par_iter().map(|_| {
         let arena = Arena::new();
         let a = bottom_up_tree(&arena, depth);
         item_check(a)
