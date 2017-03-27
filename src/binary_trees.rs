@@ -4,7 +4,8 @@
 // contributed by the Rust Project Developers
 // contributed by Matt Brubeck
 // contributed by TeXitoi
-// contributed by Cristi Cobzarenco (@cristicbz)
+// contributed by Cristi Cobzarenco
+// *reset*
 
 extern crate typed_arena;
 extern crate rayon;
@@ -14,23 +15,22 @@ use rayon::prelude::*;
 
 struct Tree<'a> {
     children: Option<(&'a Tree<'a>, &'a Tree<'a>)>,
-    item: i32,
 }
 
 fn item_check(tree: &Tree) -> i32 {
     if let Some((left, right)) = tree.children {
-        tree.item - item_check(right) + item_check(left)
+        1 + item_check(right) + item_check(left)
     } else {
-        tree.item
+        1
     }
 }
 
-fn bottom_up_tree<'r>(arena: &'r Arena<Tree<'r>>, item: i32, depth: i32)
+fn bottom_up_tree<'r>(arena: &'r Arena<Tree<'r>>, depth: i32)
                   -> &'r Tree<'r> {
-    let mut tree = arena.alloc(Tree { children: None, item: item });
+    let mut tree = arena.alloc(Tree { children: None });
     if depth > 0 {
-        let right = bottom_up_tree(arena, 2 * item, depth - 1);
-        let left = bottom_up_tree(arena, 2 * item - 1, depth - 1);
+        let right = bottom_up_tree(arena, depth - 1);
+        let left = bottom_up_tree(arena, depth - 1);
         tree.children = Some((left, right))
     }
     tree
@@ -39,11 +39,10 @@ fn bottom_up_tree<'r>(arena: &'r Arena<Tree<'r>>, item: i32, depth: i32)
 fn inner(depth: i32, iterations: i32) -> String {
     let chk = (1 .. iterations + 1).into_par_iter().map(|i| {
         let arena = Arena::new();
-        let a = bottom_up_tree(&arena, i, depth);
-        let b = bottom_up_tree(&arena, -i, depth);
-        item_check(a) + item_check(b)
+        let a = bottom_up_tree(&arena, depth);
+        item_check(a)
     }).sum();
-    format!("{}\t trees of depth {}\t check: {}", iterations * 2, depth, chk)
+    format!("{}\t trees of depth {}\t check: {}", iterations, depth, chk)
 }
 
 fn main() {
@@ -56,12 +55,12 @@ fn main() {
     {
         let arena = Arena::new();
         let depth = max_depth + 1;
-        let tree = bottom_up_tree(&arena, 0, depth);
+        let tree = bottom_up_tree(&arena, depth);
         println!("stretch tree of depth {}\t check: {}", depth, item_check(tree));
     }
 
     let long_lived_arena = Arena::new();
-    let long_lived_tree = bottom_up_tree(&long_lived_arena, 0, max_depth);
+    let long_lived_tree = bottom_up_tree(&long_lived_arena, max_depth);
 
     let messages = (min_depth/2..max_depth/2 + 1).into_par_iter().map(|half_depth| {
             let depth = half_depth * 2;
