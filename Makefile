@@ -6,7 +6,7 @@ REGEX ?= regex-0.2.1
 ARENA ?= typed-arena-1.1.0
 NUM_CPU ?= num_cpus-1.2.1
 FUTURES_CPUPOOL ?= futures-cpupool-0.1.2
-RAYON ?= rayon-0.6
+RAYON ?= rayon-0.7
 ORDERMAP ?= ordermap-0.2.7
 CROSSBEAM ?= crossbeam-0.2
 
