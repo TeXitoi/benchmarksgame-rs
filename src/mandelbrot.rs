@@ -127,7 +127,6 @@ fn main() {
 
     let mut output = vec![0u8; size * size / VLEN];
     output.par_chunks_mut(size / VLEN)
-        .weight_max()
         .enumerate()
         .for_each(|(y, chunk)| {
             let mut m = Mandelbrot8::new(Vecf64([y as f64 * inv - 1.; VLEN]));

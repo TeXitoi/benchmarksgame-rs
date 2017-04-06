@@ -36,7 +36,7 @@ fn bottom_up_tree<'r>(arena: &'r Arena<Tree<'r>>, depth: i32)
 }
 
 fn inner(depth: i32, iterations: i32) -> String {
-    let chk = (0 .. iterations).into_par_iter().map(|_| {
+    let chk: i32 = (0 .. iterations).into_par_iter().map(|_| {
         let arena = Arena::new();
         let a = bottom_up_tree(&arena, depth);
         item_check(a)
