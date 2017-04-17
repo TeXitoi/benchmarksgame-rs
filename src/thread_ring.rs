@@ -3,30 +3,106 @@
 //
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
+// contributed by Joshua Landau
 
-use std::sync::mpsc::{channel, Sender, Receiver};
-use std::thread;
+// Custom locks for 2-stage locking
+mod locks {
+    use std::sync::{Condvar, Mutex};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::thread;
 
-fn start(n_tasks: i32, token: i32) {
-    let (tx, mut rx) = channel();
-    tx.send(token).unwrap();
-    let mut guards = Vec::with_capacity(n_tasks as usize);
-    for i in 2 .. n_tasks + 1 {
-        let (tx, next_rx) = channel();
-        let cur_rx = std::mem::replace(&mut rx, next_rx);
-        guards.push(thread::spawn(move|| roundtrip(i, tx, cur_rx)));
+    pub struct Lock {
+        condvar: Condvar,
+        is_set: Mutex<bool>
     }
-    guards.push(thread::spawn(move|| roundtrip(1, tx, rx)));
-    for g in guards { g.join().unwrap(); }
+
+    impl Lock {
+        pub fn new(unlocked: bool) -> Lock {
+            Lock { condvar: Condvar::new(), is_set: Mutex::new(unlocked) }
+        }
+
+        pub fn lock(&self) {
+            let mut set = self.is_set.lock().unwrap();
+            while !*set {
+                set = self.condvar.wait(set).unwrap();
+            }
+            *set = false;
+        }
+
+        pub fn unlock(&self) {
+            let mut set = self.is_set.lock().unwrap();
+            *set = true;
+            self.condvar.notify_one();
+        }
+    }
+
+    const EMPTY: usize = ::std::usize::MAX;
+    pub struct SpinLock(AtomicUsize);
+
+    impl SpinLock {
+        pub fn new(value: Option<usize>) -> SpinLock {
+            SpinLock(AtomicUsize::new(value.unwrap_or(EMPTY)))
+        }
+
+        pub fn lock(&self) -> usize {
+            loop {
+                let gotten = self.0.swap(EMPTY, Ordering::SeqCst);
+                if gotten != EMPTY {
+                    return gotten;
+                }
+                thread::yield_now();
+            }
+        }
+
+        pub fn unlock(&self, value: usize) {
+            self.0.store(value, Ordering::SeqCst);
+        }
+    }
 }
 
-fn roundtrip(id: i32, tx: Sender<i32>, rx: Receiver<i32>) {
-    for token in rx.iter() {
-        if token == 1 {
-            println!("{}", id);
-            break;
-        }
-        tx.send(token - 1).unwrap();
+use std::sync::Arc;
+use std::thread;
+
+use locks::{Lock, SpinLock};
+
+fn start(n_tasks: usize, token: usize) {
+    let locks: Vec<_> = (0..n_tasks).map(|i|
+        Arc::new(Lock::new(i == 1 || i == 2))
+    ).collect();
+
+    let io: Vec<_> = (0..n_tasks).map(|i|
+        Arc::new(SpinLock::new(if i == 1 { Some(token) } else { None }))
+    ).collect();
+
+    let threads: Vec<_> = (0..n_tasks).map(|i| {
+        let lock   = locks[i].clone();
+        let input  = io[i].clone();
+        let output = io[(i + 1) % n_tasks].clone();
+        let unlock = locks[(i + 2) % n_tasks].clone();
+
+        thread::spawn(move || roundtrip(i + 1, lock, input, output, unlock))
+    }).collect();
+
+    for thread in threads {
+        thread.join().unwrap();
+    }
+}
+
+fn roundtrip(
+    thread_id: usize,
+    lock:   Arc<Lock>,
+    input:  Arc<SpinLock>,
+    output: Arc<SpinLock>,
+    unlock: Arc<Lock>,
+) {
+    loop {
+        lock.lock();
+        let input_value = input.lock();
+        output.unlock(input_value.saturating_sub(1));
+        unlock.unlock();
+
+        if input_value == 1 { println!("{}", thread_id); }
+        if input_value <= 1 { return; }
     }
 }
 
