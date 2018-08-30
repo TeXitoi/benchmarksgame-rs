@@ -4,7 +4,6 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 // multi-threaded version contributed by Alisdair Owens
-extern crate num_cpus;
 
 use std::cmp::min;
 use std::io;
@@ -182,7 +181,7 @@ fn main() {
         .and_then(|n| n.parse().ok())
         .unwrap_or(1000);
 
-    let num_threads: u16 = num_cpus::get() as u16;
+    let num_threads: u16 = 4;
 
     let rng = Arc::new(Mutex::new(MyRandom::new(n*3, num_threads)));
     let alu: &[u8] = b"GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTT\

@@ -4,7 +4,6 @@ RUSTC_FLAGS ?= -C opt-level=3 -C target-cpu=core2 -C lto
 RUSTC_FLAGS += -L ./lib
 REGEX ?= regex-1.0.4
 ARENA ?= typed-arena-1.4.1
-NUM_CPU ?= num_cpus-1.8.0
 FUTURES_CPUPOOL ?= futures-cpupool-0.1.8
 RAYON ?= rayon-1.0.2
 INDEXMAP ?= indexmap-1.0.1
@@ -25,7 +24,6 @@ distclean: clean
 
 bin/binary_trees: lib/$(ARENA).pkg lib/$(RAYON).pkg
 bin/fannkuch_redux: lib/$(RAYON).pkg
-bin/fasta: lib/$(NUM_CPU).pkg
 bin/k_nucleotide: lib/$(FUTURES_CPUPOOL).pkg lib/$(INDEXMAP).pkg
 bin/mandelbrot: lib/$(RAYON).pkg
 bin/regex_redux: lib/$(REGEX).pkg
