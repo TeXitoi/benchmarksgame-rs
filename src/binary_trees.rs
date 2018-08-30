@@ -26,7 +26,7 @@ fn item_check(tree: &Tree) -> i32 {
 
 fn bottom_up_tree<'r>(arena: &'r Arena<Tree<'r>>, depth: i32)
                   -> &'r Tree<'r> {
-    let mut tree = arena.alloc(Tree { children: None });
+    let tree = arena.alloc(Tree { children: None });
     if depth > 0 {
         let right = bottom_up_tree(arena, depth - 1);
         let left = bottom_up_tree(arena, depth - 1);
