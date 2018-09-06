@@ -35,29 +35,37 @@ impl F64x4 {
     }
 }
 
-macro_rules! op {
-    { $ty:ident $Op:ident $op:ident $AssignOp:ident $assign:ident $o:tt $($nos:tt)* } => {
-        impl $Op for $ty {
-            type Output = $ty;
-            fn $op(self, rhs: $ty) -> $ty {
-                $ty( $((self. $nos) $o (rhs. $nos)),* )
-            }
-        }
-
-        impl $AssignOp for $ty {
-            fn $assign(&mut self, rhs: $ty) {
-                $( self. $nos = self. $nos $o rhs. $nos ; )*
-            }
-        }
-    };
+impl Mul for F64x2 {
+    type Output = Self;
+    fn mul(self, rhs: Self) -> Self {
+        F64x2(self.0 * rhs.0, self.1 * rhs.1)
+    }
+}
+impl Div for F64x2 {
+    type Output = Self;
+    fn div(self, rhs: Self) -> Self {
+        F64x2(self.0 / rhs.0, self.1 / rhs.1)
+    }
 }
 
-op! { F64x2 Mul mul MulAssign mul_assign * 0 1 }
-op! { F64x2 Div div DivAssign div_assign / 0 1 }
-
-op! { F64x4 Add add AddAssign add_assign + 0 1 2 3 }
-op! { F64x4 Sub sub SubAssign sub_assign - 0 1 2 3 }
-op! { F64x4 Mul mul MulAssign mul_assign * 0 1 2 3 }
+impl Add for F64x4 {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self {
+        F64x4(self.0 + rhs.0, self.1 + rhs.1, self.2 + rhs.2, self.3 + rhs.3)
+    }
+}
+impl Sub for F64x4 {
+    type Output = Self;
+    fn sub(self, rhs: Self) -> Self {
+        F64x4(self.0 - rhs.0, self.1 - rhs.1, self.2 - rhs.2, self.3 - rhs.3)
+    }
+}
+impl Mul for F64x4 {
+    type Output = Self;
+    fn mul(self, rhs: Self) -> Self {
+        F64x4(self.0 * rhs.0, self.1 * rhs.1, self.2 * rhs.2, self.3 * rhs.3)
+    }
+}
 
 impl Mul<f64> for F64x4 {
     type Output = F64x4;
@@ -151,7 +159,7 @@ pub fn offset_momentum(bodies: &mut [Body; N_BODIES]) {
     let sun = &mut sun[0];
     for body in rest {
         let m_ratio = body.mass / SOLAR_MASS;
-        sun.v -= body.v * m_ratio;
+        sun.v = sun.v - body.v * m_ratio;
     }
 }
 
@@ -196,13 +204,13 @@ pub fn advance(bodies: &mut [Body; N_BODIES], dt: f64) {
     for j in 0..N_BODIES {
         for k in j + 1..N_BODIES {
             let f = r[i] * mag[i];
-            bodies[j].v -= f * bodies[k].mass;
-            bodies[k].v += f * bodies[j].mass;
+            bodies[j].v = bodies[j].v - f * bodies[k].mass;
+            bodies[k].v = bodies[k].v + f * bodies[j].mass;
             i += 1
         }
     }
     for body in bodies {
-        body.x += body.v * dt;
+        body.x = body.x + body.v * dt;
     }
 }
 
