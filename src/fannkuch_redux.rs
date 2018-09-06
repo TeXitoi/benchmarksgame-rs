@@ -4,11 +4,35 @@
 // contributed by the Rust Project Developers
 // contributed by TeXitoi
 // contributed by Cristi Cobzarenco (@cristicbz)
+// contributed by Andre Bogus
 
 extern crate rayon;
 
-use std::{cmp, mem};
+use std::cmp;
 use rayon::prelude::*;
+use std::arch::x86_64::*;
+
+#[cfg(target_arch = "x86_64")]
+#[derive(Copy, Clone)]
+pub struct U8x16(__m128i);
+
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2",
+          target_feature = "ssse3"))]
+impl U8x16 {
+    pub fn zero() -> U8x16 { U8x16(unsafe { _mm_setzero_si128() }) }
+    pub fn from_slice_unaligned(s: &[u8; 16]) -> U8x16 {
+        U8x16(unsafe { _mm_loadu_si128(s.as_ptr() as *const _) })
+    }
+    pub fn write_to_slice_unaligned(self, s: &mut [u8; 16]) {
+        unsafe { _mm_storeu_si128(s.as_mut_ptr() as *mut _, self.0) }
+    }
+    pub fn extract0(self) -> i32 {
+        unsafe { _mm_extract_epi16(self.0, 0i32) & 0xFF }
+    }
+    pub fn permute_dyn(self, indices: U8x16) -> U8x16 {
+        U8x16(unsafe { _mm_shuffle_epi8(self.0, indices.0) })
+    }
+}
 
 // This value controls the preferred maximum number of  blocks the workload is
 // broken up into. The actual value may be one higher (if the number of
@@ -19,7 +43,7 @@ const NUM_BLOCKS: u32 = 24;
 fn fannkuch(n: i32) -> (i32, i32) {
     // Precompute a table a factorials to reuse all over the place.
     let mut factorials = [1; 16];
-    for i in 1..n as usize + 1 {
+    for i in 1..=n as usize {
         factorials[i] = factorials[i - 1] * i as u32;
     }
     let perm_max = factorials[n as usize];
@@ -35,17 +59,30 @@ fn fannkuch(n: i32) -> (i32, i32) {
          perm_max / NUM_BLOCKS)
     };
 
+    // precompute flips and rotations
+    let mut flip_masks = [U8x16::zero(); 16];
+    let mut rotate_masks = [U8x16::zero(); 16];
+    let mut mask = [0u8; 16];
+    for i in 0..16 {
+        mask.iter_mut().enumerate().for_each(|(j, m)| *m = j as u8);
+        mask[0..i + 1].reverse();
+        flip_masks[i] = U8x16::from_slice_unaligned(&mask);
+        mask.iter_mut().enumerate().for_each(|(j, m)| *m = j as u8);
+        let c = mask[0];
+        (0..i).for_each(|i| mask[i] = mask[i + 1]);
+        mask[i] = c;
+        rotate_masks[i] = U8x16::from_slice_unaligned(&mask);
+    }
+
     // Compute the `checksum` and `maxflips` for each block in parallel.
     (0..num_blocks).into_par_iter().map(|i_block| {
         let initial = i_block * block_size;
         let mut count = [0i32; 16];
-        let mut temp = [0i32; 16];
-        let mut current = [0i32; 16];
+        let mut temp = [0u8; 16];
+        let mut current = [0u8; 16];
 
         // Initialise `count` and the current permutation (`current`)
-        for (i, value) in current.iter_mut().enumerate() {
-            *value = i as i32;
-        }
+        current.iter_mut().enumerate().for_each(|(i, value)| *value = i as u8);
 
         let mut permutation_index = initial as i32;
         for i in (1..n as usize).rev() {
@@ -56,16 +93,12 @@ fn fannkuch(n: i32) -> (i32, i32) {
 
             temp.copy_from_slice(&current);
             let d = d as usize;
-            for j in 0..i + 1 {
-                current[j] = if j + d <= i {
-                    temp[j + d]
-                } else {
-                    temp[j + d - i - 1]
-                };
-            }
+            current[0..=i - d].copy_from_slice(&temp[d..=i]);
+            current[i - d + 1..=i].copy_from_slice(&temp[0..d])
         }
 
         // Iterate over each permutation in the block.
+        let mut perm = U8x16::from_slice_unaligned(&current);
         let last_permutation_in_block = cmp::min(initial + block_size,
                                                  perm_max) - 1;
         let mut permutation_index = initial;
@@ -73,27 +106,14 @@ fn fannkuch(n: i32) -> (i32, i32) {
         loop {
             // If the first value in the current permutation is not 1 (0) then
             // we will need to do at least one flip for `current`.
-            if current[0] > 0 {
+            if perm.extract0() > 0 {
                 // Copy the current permutation to work on it.
-                temp.copy_from_slice(&current);
-
-                // Flip `temp` (the copy of the current permutation) until its
-                // first element is 1 (0).
-                let mut flip_count = 1;
-                let mut first_value = current[0] as usize;
-                while temp[first_value] != 0 {
-                    let new_first_value = mem::replace(&mut temp[first_value],
-                                                       first_value as i32);
-                    // If the first value is greater than 3 (2), then we are
-                    // flipping a series of four or more values so we will need
-                    // to flip additional elements in the middle of `temp`.
-                    if first_value > 2 {
-                        temp[1..first_value].reverse();
-                    }
-
-                    // Update `first_value` to the value we saved earlier and
-                    // record a flip in `flip_count`.
-                    first_value = new_first_value as usize;
+                let mut flip_count = 0;
+                let mut flip = perm;
+                loop {
+                    let flip_index = flip.extract0() as usize;
+                    if flip_index == 0 { break; }
+                    flip = flip.permute_dyn(flip_masks[flip_index]);
                     flip_count += 1;
                 }
 
@@ -113,21 +133,13 @@ fn fannkuch(n: i32) -> (i32, i32) {
                 return (checksum, maxflips);
             }
             permutation_index += 1;
-
+            perm = perm.permute_dyn(rotate_masks[1]);
             // Generate the next permutation.
-            let mut first_value = current[1];
-            current[1] = current[0];
-            current[0] = first_value;
             let mut i = 1;
             while count[i] >= i as i32 {
                 count[i] = 0;
                 i += 1;
-                let new_first_value = current[1];
-                current[0] = new_first_value;
-                for j in 1..i {
-                    current[j] = current[j + 1];
-                }
-                current[i] = mem::replace(&mut first_value, new_first_value);
+                perm = perm.permute_dyn(rotate_masks[i]);
             }
             count[i] += 1;
         }
