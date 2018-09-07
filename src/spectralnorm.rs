@@ -113,9 +113,6 @@ fn dot(v: &[F64x2], u: &[F64x2]) -> f64 {
     r.sum()
 }
 
-// Hint that this function should not be inlined. Keep the parallelised code tight, and vectorize
-// better.
-#[inline(never)]
 fn div_and_add(x: F64x2,
                a0: F64x2,
                a1: F64x2,
