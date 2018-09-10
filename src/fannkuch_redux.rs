@@ -10,28 +10,39 @@ extern crate rayon;
 
 use std::cmp;
 use rayon::prelude::*;
-use std::arch::x86_64::*;
 
-#[cfg(target_arch = "x86_64")]
-#[derive(Copy, Clone)]
-pub struct U8x16(__m128i);
-
-#[cfg(all(target_arch = "x86_64", target_feature = "sse2",
-          target_feature = "ssse3"))]
-impl U8x16 {
-    pub fn zero() -> U8x16 { U8x16(unsafe { _mm_setzero_si128() }) }
-    pub fn from_slice_unaligned(s: &[u8; 16]) -> U8x16 {
-        U8x16(unsafe { _mm_loadu_si128(s.as_ptr() as *const _) })
+pub fn pack(perm: &[u8; 16]) -> u64 {
+    perm.iter().rev().fold(0, |acc, &i| (acc << 4) + i as u64)
+}
+pub fn flips(perm: u64) -> i32 {
+    const LOWER: u64 = 0x0f0f0f0f0f0f0f0fu64;
+    let (mut flip, mut flip_count) = (perm, 0);
+    loop {
+        let flip_index = (flip & 0xf) as usize;
+        if flip_index == 0 { break; }
+        let (s, n4) = (flip.swap_bytes(), flip_index * 4);
+        flip &= !0xf << n4;
+        flip |= (((s & LOWER) << 4) | (s >> 4) & LOWER) >> (60 - n4);
+        flip_count += 1;
     }
-    pub fn write_to_slice_unaligned(self, s: &mut [u8; 16]) {
-        unsafe { _mm_storeu_si128(s.as_mut_ptr() as *mut _, self.0) }
+    flip_count
+}
+pub fn permute(perm: u64, count: &mut [u8; 16]) -> u64 {
+    let mut perm = rotate(perm, 1);
+    // Generate the next permutation.
+    let mut i = 1;
+    while count[i] >= i as u8 {
+        count[i] = 0;
+        i += 1;
+        perm = rotate(perm, i);
     }
-    pub fn extract0(self) -> i32 {
-        unsafe { _mm_extract_epi16(self.0, 0i32) & 0xFF }
-    }
-    pub fn permute_dyn(self, indices: U8x16) -> U8x16 {
-        U8x16(unsafe { _mm_shuffle_epi8(self.0, indices.0) })
-    }
+    count[i] += 1;
+    perm
+}
+fn rotate(perm: u64, n: usize) -> u64 {
+    let n4 = n * 4;
+    let mask = !0xf << n4;
+    perm & mask | (perm & !mask) >> 4 | (perm & 0xf) << n4
 }
 
 // This value controls the preferred maximum number of  blocks the workload is
@@ -59,25 +70,10 @@ fn fannkuch(n: i32) -> (i32, i32) {
          perm_max / NUM_BLOCKS)
     };
 
-    // precompute flips and rotations
-    let mut flip_masks = [U8x16::zero(); 16];
-    let mut rotate_masks = [U8x16::zero(); 16];
-    let mut mask = [0u8; 16];
-    for i in 0..16 {
-        mask.iter_mut().enumerate().for_each(|(j, m)| *m = j as u8);
-        mask[0..i + 1].reverse();
-        flip_masks[i] = U8x16::from_slice_unaligned(&mask);
-        mask.iter_mut().enumerate().for_each(|(j, m)| *m = j as u8);
-        let c = mask[0];
-        (0..i).for_each(|i| mask[i] = mask[i + 1]);
-        mask[i] = c;
-        rotate_masks[i] = U8x16::from_slice_unaligned(&mask);
-    }
-
     // Compute the `checksum` and `maxflips` for each block in parallel.
     (0..num_blocks).into_par_iter().map(|i_block| {
         let initial = i_block * block_size;
-        let mut count = [0i32; 16];
+        let mut count = [0u8; 16];
         let mut temp = [0u8; 16];
         let mut current = [0u8; 16];
 
@@ -89,7 +85,7 @@ fn fannkuch(n: i32) -> (i32, i32) {
             let factorial = factorials[i] as i32;
             let d = permutation_index / factorial;
             permutation_index %= factorial;
-            count[i] = d;
+            count[i] = d as u8;
 
             temp.copy_from_slice(&current);
             let d = d as usize;
@@ -98,7 +94,7 @@ fn fannkuch(n: i32) -> (i32, i32) {
         }
 
         // Iterate over each permutation in the block.
-        let mut perm = U8x16::from_slice_unaligned(&current);
+        let mut perm = pack(&current);
         let last_permutation_in_block = cmp::min(initial + block_size,
                                                  perm_max) - 1;
         let mut permutation_index = initial;
@@ -106,17 +102,8 @@ fn fannkuch(n: i32) -> (i32, i32) {
         loop {
             // If the first value in the current permutation is not 1 (0) then
             // we will need to do at least one flip for `current`.
-            if perm.extract0() > 0 {
-                // Copy the current permutation to work on it.
-                let mut flip_count = 0;
-                let mut flip = perm;
-                loop {
-                    let flip_index = flip.extract0() as usize;
-                    if flip_index == 0 { break; }
-                    flip = flip.permute_dyn(flip_masks[flip_index]);
-                    flip_count += 1;
-                }
-
+            if perm & 0xf > 0 {
+                let flip_count = flips(perm);
                 // Update the `checksum` and `maxflips` of this block.
                 checksum += if permutation_index % 2 == 0 {
                     flip_count
@@ -133,15 +120,7 @@ fn fannkuch(n: i32) -> (i32, i32) {
                 return (checksum, maxflips);
             }
             permutation_index += 1;
-            perm = perm.permute_dyn(rotate_masks[1]);
-            // Generate the next permutation.
-            let mut i = 1;
-            while count[i] >= i as i32 {
-                count[i] = 0;
-                i += 1;
-                perm = perm.permute_dyn(rotate_masks[i]);
-            }
-            count[i] += 1;
+            perm = permute(perm, &mut count);
         }
     }).reduce(|| (0, 0),
               |(cs1, mf1), (cs2, mf2)| (cs1 + cs2, cmp::max(mf1, mf2)))
