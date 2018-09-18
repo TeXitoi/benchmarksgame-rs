@@ -145,7 +145,7 @@ fn reverse_complement(seq: &mut [u8], table: &[u8; 256]) {
 }
 
 /// Read sequences from stdin and print the reverse complement to stdout.
-fn run() -> io::Result<()> {
+fn main() -> io::Result<()> {
     let stdin = File::open("/dev/stdin")?;
     let size = stdin.metadata()?.len() as usize;
     let mut input = BufReader::with_capacity(READ_SIZE, stdin);
@@ -179,8 +179,4 @@ fn run() -> io::Result<()> {
 
     // Print the result.
     io::stdout().write_all(&buf)
-}
-
-fn main() {
-    run().unwrap()
 }
