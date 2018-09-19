@@ -9,32 +9,32 @@
 
 extern crate regex;
 
+use regex::bytes::Regex;
 use std::borrow::Cow;
+use std::error::Error;
 use std::fs;
 use std::sync::Arc;
 use std::thread;
 
-macro_rules! regex { ($re:expr) => { ::regex::bytes::Regex::new($re).unwrap() } }
-
-fn main() {
-    let mut seq = fs::read("/dev/stdin").unwrap();
+fn main() -> Result<(), Box<Error>> {
+    let mut seq = fs::read("/dev/stdin")?;
     let ilen = seq.len();
 
     // Remove headers and newlines.
-    seq = regex!(">[^\n]*\n|\n").replace_all(&seq, &b""[..]).into_owned();
+    seq = Regex::new(">[^\n]*\n|\n")?.replace_all(&seq, &b""[..]).into_owned();
     let clen = seq.len();
 
     // Search for occurrences of the following patterns:
     let variants = vec![
-        regex!("agggtaaa|tttaccct"),
-        regex!("[cgt]gggtaaa|tttaccc[acg]"),
-        regex!("a[act]ggtaaa|tttacc[agt]t"),
-        regex!("ag[act]gtaaa|tttac[agt]ct"),
-        regex!("agg[act]taaa|ttta[agt]cct"),
-        regex!("aggg[acg]aaa|ttt[cgt]ccct"),
-        regex!("agggt[cgt]aa|tt[acg]accct"),
-        regex!("agggta[cgt]a|t[acg]taccct"),
-        regex!("agggtaa[cgt]|[acg]ttaccct"),
+        Regex::new("agggtaaa|tttaccct")?,
+        Regex::new("[cgt]gggtaaa|tttaccc[acg]")?,
+        Regex::new("a[act]ggtaaa|tttacc[agt]t")?,
+        Regex::new("ag[act]gtaaa|tttac[agt]ct")?,
+        Regex::new("agg[act]taaa|ttta[agt]cct")?,
+        Regex::new("aggg[acg]aaa|ttt[cgt]ccct")?,
+        Regex::new("agggt[cgt]aa|tt[acg]accct")?,
+        Regex::new("agggta[cgt]a|t[acg]taccct")?,
+        Regex::new("agggtaa[cgt]|[acg]ttaccct")?,
     ];
 
     // Count each pattern in parallel.  Use an Arc (atomic reference-counted
@@ -50,11 +50,11 @@ fn main() {
 
     // Replace the following patterns, one at a time:
     let substs = vec![
-        (regex!("tHa[Nt]"), &b"<4>"[..]),
-        (regex!("aND|caN|Ha[DS]|WaS"), &b"<3>"[..]),
-        (regex!("a[NSt]|BY"), &b"<2>"[..]),
-        (regex!("<[^>]*>"), &b"|"[..]),
-        (regex!("\\|[^|][^|]*\\|"), &b"-"[..]),
+        (Regex::new("tHa[Nt]")?, &b"<4>"[..]),
+        (Regex::new("aND|caN|Ha[DS]|WaS")?, &b"<3>"[..]),
+        (Regex::new("a[NSt]|BY")?, &b"<2>"[..]),
+        (Regex::new("<[^>]*>")?, &b"|"[..]),
+        (Regex::new("\\|[^|][^|]*\\|")?, &b"-"[..]),
     ];
 
     // Use Cow here to avoid one extra copy of the sequence, by borrowing from
@@ -71,4 +71,5 @@ fn main() {
         println!("{} {}", variant, count.join().unwrap());
     }
     println!("\n{}\n{}\n{}", ilen, clen, seq.len());
+    Ok(())
 }
