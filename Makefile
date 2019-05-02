@@ -2,12 +2,12 @@ SOURCES = $(wildcard src/*.rs)
 RUSTC ?= rustc
 RUSTC_FLAGS ?= -C opt-level=3 -C target-cpu=core2 -C lto
 RUSTC_FLAGS += -L ./lib
-REGEX ?= regex-1.0.4
+REGEX ?= regex-1.1.5
 ARENA ?= typed-arena-1.4.1
 FUTURES_CPUPOOL ?= futures-cpupool-0.1.8
-RAYON ?= rayon-1.0.2
+RAYON ?= rayon-1.0.3
 INDEXMAP ?= indexmap-1.0.1
-CROSSBEAM ?= crossbeam-0.4.1
+CROSSBEAM_UTILS ?= crossbeam-utils-0.6.5
 
 version=$(lastword $(subst -,  , $1))
 crate=$(strip $(subst -$(call version, $1),, $1))
@@ -22,11 +22,12 @@ clean:
 distclean: clean
 	rm -fr bin out tmp lib
 
-bin/binary_trees: lib/$(ARENA).pkg lib/$(RAYON).pkg
+bin/binary_trees: lib/$(TOOLSHED).pkg lib/$(RAYON).pkg
+bin/binary_trees2: lib/$(RAYON).pkg
 bin/fannkuch_redux: lib/$(RAYON).pkg
 bin/k_nucleotide: lib/$(FUTURES_CPUPOOL).pkg lib/$(INDEXMAP).pkg
 bin/mandelbrot: lib/$(RAYON).pkg
-bin/regex_redux: lib/$(REGEX).pkg
+bin/regex_redux: lib/$(REGEX).pkg lib/$(CROSSBEAM_UTILS).pkg
 bin/reverse_complement: lib/$(RAYON).pkg
 bin/spectralnorm: lib/$(RAYON).pkg
 
