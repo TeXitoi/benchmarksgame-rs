@@ -8,12 +8,11 @@
 
 extern crate rayon;
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, Write, stdin};
 use std::{cmp, io};
-use std::fs::File;
 use std::mem::replace;
 
-/// This controls the size of reads from the input. Chosen to match the C entry.
+/// This controls the initial size of the read buffer. Chosen to match the C entry.
 const READ_SIZE: usize = 16 * 1024;
 
 /// Length of a normal line including the terminating \n.
@@ -146,12 +145,11 @@ fn reverse_complement(seq: &mut [u8], table: &[u8; 256]) {
 
 /// Read sequences from stdin and print the reverse complement to stdout.
 fn run() -> io::Result<()> {
-    let stdin = File::open("/dev/stdin")?;
-    let size = stdin.metadata()?.len() as usize;
-    let mut input = BufReader::with_capacity(READ_SIZE, stdin);
+    let stdin = stdin();
+    let mut input = stdin.lock();
 
     // Read the input, splitting it into sequences.
-    let mut buf = Vec::with_capacity(size);
+    let mut buf = Vec::with_capacity(READ_SIZE);
     let mut seqs = vec![];
     loop {
         // Read the header line.
