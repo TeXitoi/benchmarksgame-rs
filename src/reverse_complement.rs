@@ -1,26 +1,24 @@
 // The Computer Language Benchmarks Game
-// http://benchmarksgame.alioth.debian.org/
+// https://salsa.debian.org/benchmarksgame-team/benchmarksgame/
 //
 // contributed by the Rust Project Developers
-// contributed by Cristi Cobzarenco (@cristicbz)
+// contributed by Cristi Cobzarenco
 // contributed by TeXitoi
 // contributed by Matt Brubeck
 
 extern crate rayon;
 
-use std::io::{BufRead, BufReader, Write};
-use std::{cmp, io};
-use std::fs::File;
+use std::cmp::min;
+use std::io::{BufRead, Result, Write, stdin, stdout};
 use std::mem::replace;
 
-/// This controls the size of reads from the input. Chosen to match the C entry.
-const READ_SIZE: usize = 16 * 1024;
-
-/// Length of a normal line including the terminating \n.
-const LINE_LEN: usize = 61;
-
-/// Chunks larger than this will be split into separate parallel tasks.
-const SEQUENTIAL_SIZE: usize = 2048;
+fn main() -> Result<()> {
+    let table = build_table();
+    for seq in get_sequences(&table)?.iter().rev() {
+        stdout().write_all(seq)?;
+    }
+    Ok(())
+}
 
 /// Lookup table to find the complement of a single FASTA code.
 fn build_table() -> [u8; 256] {
@@ -49,37 +47,49 @@ fn build_table() -> [u8; 256] {
     table
 }
 
-/// Utilities for splitting chunks off of slices.
-trait SplitOff {
-    fn split_off_left(&mut self, n: usize) -> Self;
-    fn split_off_right(&mut self, n: usize) -> Self;
-}
-impl<'a, T> SplitOff for &'a mut [T] {
-    /// Split the left `n` items from self and return them as a separate slice.
-    fn split_off_left(&mut self, n: usize) -> Self {
-        let n = cmp::min(self.len(), n);
-        let data = replace(self, &mut []);
-        let (left, data) = data.split_at_mut(n);
-        *self = data;
-        left
-    }
-    /// Split the right `n` items from self and return them as a separate slice.
-    fn split_off_right(&mut self, n: usize) -> Self {
-        let len = self.len();
-        let n = cmp::min(len, n);
-        let data = replace(self, &mut []);
-        let (data, right) = data.split_at_mut(len - n);
-        *self = data;
-        right
+/// Read each sequence from stdin, process it, and return it.
+fn get_sequences(table: &[u8; 256]) -> Result<Vec<Vec<u8>>> {
+    let stdin = stdin();
+    let mut input = stdin.lock();
+    let mut buf = Vec::with_capacity(16 * 1024);
+
+    // Read the header line.
+    input.read_until(b'\n', &mut buf)?;
+    let start = buf.len();
+
+    // Read sequence data.
+    input.read_until(b'>', &mut buf)?;
+    let end = buf.len();
+    drop(input);
+
+    if buf[end - 1] == b'>' {
+        // Found the start of a new sequence. Process this one
+        // and start reading the next one in parallel.
+        let mut results = rayon::join(
+            || reverse_complement(&mut buf[start..end - 1], &table),
+            || get_sequences(table)).1?;
+        results.push(buf);
+        Ok(results)
+    } else {
+        // Reached the end of the file.
+        reverse_complement(&mut buf[start..end], &table);
+        Ok(vec![buf])
     }
 }
 
-/// Compute the reverse complement for two contiguous chunks without line breaks.
-fn reverse_chunks(left: &mut [u8], right: &mut [u8], table: &[u8; 256]) {
-    for (x, y) in left.iter_mut().zip(right.iter_mut().rev()) {
-        *y = table[replace(x, table[*y as usize]) as usize];
-    }
+/// Compute the reverse complement of one sequence.
+fn reverse_complement(seq: &mut [u8], table: &[u8; 256]) {
+    let len = seq.len() - 1;
+    let seq = &mut seq[..len]; // Drop the last newline
+    let trailing_len = len % LINE_LEN;
+    let (left, right) = seq.split_at_mut(len / 2);
+    reverse_complement_left_right(left, right, trailing_len, table);
 }
+
+/// Length of a normal line including the terminating \n.
+const LINE_LEN: usize = 61;
+/// Maximum number of bytes to process in serial.
+const SEQUENTIAL_SIZE: usize = 16 * 1024;
 
 /// Compute the reverse complement on chunks from opposite ends of a sequence.
 ///
@@ -136,51 +146,34 @@ fn reverse_complement_left_right(mut left: &mut [u8],
     }
 }
 
-/// Compute the reverse complement of one sequence.
-fn reverse_complement(seq: &mut [u8], table: &[u8; 256]) {
-    let len = seq.len();
-    let trailing_len = len % LINE_LEN;
-    let (left, right) = seq.split_at_mut(len / 2);
-    reverse_complement_left_right(left, right, trailing_len, table);
+/// Compute the reverse complement for two contiguous chunks without line breaks.
+fn reverse_chunks(left: &mut [u8], right: &mut [u8], table: &[u8; 256]) {
+    for (x, y) in left.iter_mut().zip(right.iter_mut().rev()) {
+        *y = table[replace(x, table[*y as usize]) as usize];
+    }
 }
 
-/// Read sequences from stdin and print the reverse complement to stdout.
-fn run() -> io::Result<()> {
-    let stdin = File::open("/dev/stdin")?;
-    let size = stdin.metadata()?.len() as usize;
-    let mut input = BufReader::with_capacity(READ_SIZE, stdin);
-
-    // Read the input, splitting it into sequences.
-    let mut buf = Vec::with_capacity(size);
-    let mut seqs = vec![];
-    loop {
-        // Read the header line.
-        input.read_until(b'\n', &mut buf)?;
-        let seq_start = buf.len();
-        // Read sequence data.
-        input.read_until(b'>', &mut buf)?;
-
-        let len = buf.len();
-        if buf[len - 1] == b'>' {
-            // Found the start of a new sequence.
-            seqs.push(seq_start..len - 2); // exclude "\n>"
-        } else {
-            // Reached the end of the input.
-            seqs.push(seq_start..len - 1); // exclude "\n"
-            break
-        }
-    }
-
-    // Compute the reverse complements of each sequence.
-    let table = build_table();
-    for seq in seqs {
-        reverse_complement(&mut buf[seq], &table);
-    }
-
-    // Print the result.
-    io::stdout().write_all(&buf)
+/// Utilities for splitting chunks off of slices.
+trait SplitOff {
+    fn split_off_left(&mut self, n: usize) -> Self;
+    fn split_off_right(&mut self, n: usize) -> Self;
 }
-
-fn main() {
-    run().unwrap()
+impl<'a, T> SplitOff for &'a mut [T] {
+    /// Split the left `n` items from self and return them as a separate slice.
+    fn split_off_left(&mut self, n: usize) -> Self {
+        let n = min(self.len(), n);
+        let data = replace(self, &mut []);
+        let (left, data) = data.split_at_mut(n);
+        *self = data;
+        left
+    }
+    /// Split the right `n` items from self and return them as a separate slice.
+    fn split_off_right(&mut self, n: usize) -> Self {
+        let len = self.len();
+        let n = min(len, n);
+        let data = replace(self, &mut []);
+        let (data, right) = data.split_at_mut(len - n);
+        *self = data;
+        right
+    }
 }
