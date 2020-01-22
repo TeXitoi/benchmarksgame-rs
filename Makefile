@@ -1,6 +1,6 @@
 SOURCES = $(wildcard src/*.rs)
 RUSTC ?= rustc
-RUSTC_FLAGS ?= -C opt-level=3 -C target-cpu=core2 -C lto
+RUSTC_FLAGS ?= -C panic=abort -C opt-level=3 -C target-cpu=core2 -C lto
 RUSTC_FLAGS += -L ./lib
 REGEX ?= regex-1.0.4
 ARENA ?= typed-arena-1.4.1
